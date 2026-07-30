@@ -108,3 +108,37 @@ bun --hot ./index.ts
 
 For more information, read the Bun API docs in
 `node_modules/bun-types/docs/**.mdx`.
+
+## Bu depoya özel: bozulmaması gereken değişmezler
+
+Demonun tamamı iki kurala dayanıyor. Refactor sırasında ikisinden biri kırılırsa
+demo sessizce yanlış cevap vermeye başlar (test edilir: `src/ctcp.test.ts`).
+
+**K1 — `resolve` asla nokta dönmez.** Her `ResolvedContainer` bir `Interval` +
+`Certainty` taşır. `formula` süresi olan her kutucuk zorunlu bir `envelope`
+bildirir; yakıt bitince çözücü formülü bırakıp oraya düşer ve damga
+`budget-truncated` olur. Aralığı noktaya indiren, envelope'u opsiyonel yapan veya
+kesinlik damgasını düşüren bir değişiklik yapma.
+
+**K2 — her dal tanımlıdır.** `onMiss` üç değer alır: `wait` · `alternative` ·
+`cancel`. Çözümleme `undefined` dönemez; her kutucuk `resolved | cancelled |
+skipped` ile sonuçlanır. Alternatif etkinleşince bağımlılıklar `rewire` ile
+yeniden bağlanır — bu yolu kaldırma.
+
+Diğer notlar:
+
+- Özyineleme serbest, sonlanma garantisi **yakıt bütçesinden** gelir
+  (`src/minilang.ts`). `MAX_DEPTH` ve `Fuel` birlikte çalışır; birini kaldırmak
+  diğerini yetersiz bırakır.
+- Kaskad dakika uzayında (gece yarısından beri), birim cebri mutlak ms'de çalışır.
+  Bu ayrım bilinçli: monoton çekirdek vs. sunum takvimi. Karıştırma.
+- Federe uçlar takvim **içeriği** göndermez. `freebusy` yalnızca yüklem cevabı
+  döner; ızgara yuvarlaması, önbellek ve sorgu bütçesi üçü birlikte parmak izi
+  savunmasıdır, biri çıkarsa diğerleri yetmez.
+- Yetenek jetonu hem gizliliği hem teklif spam'ini kesen tek primitif. Jetonsuz
+  istek `401` dönmeli.
+- Düğüm mantığının tamamı `src/core.ts`'te ve taşımadan bağımsız.
+  `src/node.ts` yalnızca Bun.serve sarmalayıcısı; `src/ui/sim.ts` aynı çekirdeği
+  tarayıcıda sayfa içi çağrıyla çalıştırır (GitHub Pages bunu yayınlar).
+  Protokol davranışını değiştiren bir düzenleme iki taşıyıcıda birden test
+  edilmeli.

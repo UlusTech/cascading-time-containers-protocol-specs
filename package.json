@@ -1,9 +1,17 @@
 {
-  "name": "cascading-time-containers-protocol-specs",
-  "module": "index.ts",
+  "name": "ctcp-demo",
+  "module": "src/index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "alice": "CTCP_NODE=alice bun --hot src/node.ts",
+    "bob": "CTCP_NODE=bob bun --hot src/node.ts",
+    "build": "rm -rf dist && bun build src/ui/sim.html --outdir=dist --minify && cp dist/sim.html dist/index.html",
+    "check": "bunx --bun tsc --noEmit && bunx --bun @biomejs/biome check src"
+  },
   "devDependencies": {
+    "@biomejs/biome": "2.5.6",
     "@types/bun": "latest"
   },
   "peerDependencies": {

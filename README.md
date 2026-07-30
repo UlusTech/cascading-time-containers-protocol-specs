@@ -1,75 +1,121 @@
-# CTCP, Cascading Time Containers Protocol
+# CTCP demo — kaskad çözücü + federasyon
 
-Zaman akar, ve zaman zamanları barındır.
+İki federe düğüm, altı kutucuk, bir toplantı. Amaç güzel görünmek değil;
+tartışılan varsayımların hangilerinin ayakta kaldığını çalışan kodla görmek.
 
-## Zaman kutucukları
+**Canlı demo:**
+<https://ulustech.github.io/cascading-time-containers-protocol-specs/> —
+iki düğüm aynı sayfada, taşıma katmanı sayfa içi doğrudan çağrı (aynı çekirdek,
+`src/core.ts`). `?node=alice` veya `?node=bob` tek panel açar. Her ziyaretçi
+kendi kum havuzunu alır.
 
-Dilimizin ve algımızın gelişme yapısı bizi "1 hafta 7 gündür, 1 gün 24 saatir"
-mantığı ile düşünmeye sürüklemiştir. Eğer zamana böyle bakarsak zaman sınırsız
-derinliğe sahiptir. Bir alt birim veya üst birim uydurmak yeterlidir.
+```sh
+bun install
+bun run src/index.ts     # gerçek iki süreç: alice :4001 · bob :4002
+bun test                 # iki protokol kanunu + birim cebri + wait dalı
+bun run build            # statik simülasyonu dist/'e derler (Pages bunu yayınlar)
+```
 
-Herkes ve herşey yıllar veya haftalar ile düşünmez, düşünülmez. Zaman bazen
-"farklıdır".
+Yerelde iki sekmeyi birlikte aç: `localhost:4001` (Alice) ve `localhost:4002`
+(Bob) — ya da tek sekmede `localhost:4001/sim`. Alice teklif gönderdiğinde iki
+log birlikte hareket eder. Arayüz takvim görünümündedir: blok = kutucuk,
+taralı bölge = belirsizlik aralığı; yakıt bütçesini düşürünce blokların
+gözle görülür biçimde uzaması demonun ana numarasıdır.
 
-12 aylık sistemimiz ve ayların eşit olmamasının temelinde de bu yatar. İnsanlar
-alışkanlıklarını kolay değiştiremezse değişikliğe gitmez.
+## İki protokol kanunu
 
-**Peki ya kendi takvimimizi, hiç bir uyumluluk sorunu olmadan
-oluşturabilseydik?**
+Demonun tamamı bu iki kurala dayanıyor. Kaldırırsan geri kalan her şey çöker.
 
-CTCP'de istediğiniz biçimde zaman planlamaları yapabilirsiniz. İsterseniz nano
-saniye biçiminde yapın, isterseniz kendiniz sıfırdan bir şey uydurun. Eğer
-yaptığınız zaman sisteminin başka birisinin de bildiği bir takvim sistemine göre
-neye denk geldiğini söyleyebilirseniz, yüzde yüz uyumlu olursunuz.
+**K1 — `resolve` asla nokta dönmez.** Aralık + kesinlik damgası döner
+(`observed` · `derived` · `budget-truncated` · `needs-oracle`). Böylece kısmi
+hesap yanlış cevap değil, sadece **daha geniş** cevap olur. Formül taşıyan her
+kutucuk zorunlu bir `envelope` bildirir; yakıt biterse çözücü formülü bırakıp
+oraya düşer.
 
-Mesela "decade" kavramını sisteminizde uydurabilirsiniz. Önünüzdeki engel ne ki?
-Başkası sorduğunda "1 Decade = 10 Years" dersiniz! Ve işin en iyi tarafı, basit
-zaman mantıkları kurmanıza gerekte yok! Karmaşık, kendi içine çöken bir zaman
-konsepti oluştursanız bile sunucunuz CTCP'ye uygun bir şekile kişiye zamanı
-söylediği sürece derin matematiksel işlemler gerekiren bir mantık bile
-oluşturabilirsiniz. Limit yok. Limit sizsiniz. Zaman ucu açık bir kavram,
-sisteme uymak zorunda değilsin; eğer derdin "açıklamak" ise uyumluluk sistemi
-yeterlidir.
+**K2 — her dal tanımlıdır.** `wait` · `alternative` · `cancel`. Çözümleme
+"tanımsız" dönemez; illa bir şey olur. İptal aşağıya yayılır, alternatif
+etkinleşince bağımlılıklar yeniden bağlanır.
 
-## Akan zaman
+Kod: `src/cascade.ts`. Özyineleme serbest, sonlanma garantisi dilden değil
+**yakıt bütçesinden** gelir (`src/minilang.ts`). Bu bir süs değil: iptal +
+alternatif + bekleme üçlüsü eklendiği an problem STNU'dan çıkıp ayrık kısıtlı
+hale geliyor, yani bütçe tasarımın zorunlu sonucu.
 
-Zaman kutuculukları birbirlerini etkileyerek işler, aynı anda iki yılda birden
-olamazsın (basit örnek). Yıllar birbirini ittirir.
+## Ne denenecek
 
-Sadece zaman temelleri böyle olmak zorunda değil, işe gideceğiniz saat
-uyandığınız saate göre değişir. Nelerin olduğu planlanmış zaman değiştirir!
+Senaryo: Alice'in sabah zinciri `uyanış → hazırlık → yol → toplantı`.
+`hazırlık` süresi kasten pahalı, özyinelemeli bir formülle hesaplanıyor.
+Bob'un kendi günü var ve Alice bunu **hiçbir zaman** görmüyor.
 
-CTCP kondisyonlar ile, matematiksel işlemler ile sürekli zamanı hesaplayan bir
-sunucu modeli ile öne çıkar. Tarihi olaylar gibi şeyler tabiki statik
-gösterilebilir, ama kişisel bir takvim dinamiktir.
+| Düğme | Ne olur | Hangi soruyu cevaplıyor |
+| --- | --- | --- |
+| (gözlem yok) | tüm zincir geniş projeksiyon, cephe boş | gözlem olmadan takvim bir aralıktır |
+| `07:00` | toplantı 07:50–08:50 → Bob standup'ı yüzünden **counter 10:00** | karşı taraf kendi kaskadıyla cevap üretiyor |
+| `09:10` | hazırlık 48 dk'ya çıkar, toplantı 10:23–11:23 → **accept** | esnek kutucuk (derin çalışma) sessizce yer açtı |
+| `09:10` + otobüsü kaçırdım | metro dalı etkinleşir, toplantı 10:43–11:48 → **counter 13:30** → son başlama vakti geçer → `async-inceleme` 16:00'da devreye girer | iptal + alternatif zinciri, "illa bir şey olur" |
+| `11:50` + yakıt `200` | hazırlık `budget-truncated`, toplantı aralığı 13:00 eşiğini keser → **KARARSIZ** | kısmi hesap yanlış değil, geniş |
+| aynı girdi + yakıt `20000` | formül çözülür, aralık daralır, karar netleşir | bütçe artırınca kararsızlık kapanıyor |
 
-CTCP sizin için otomatik olarak zamanı hesaplar. Siz girdiler ve eklenti gibi
-sistemler ile takvime veri beslersiniz. Mesela işe başlamanızı veya bir toplu
-taşıma sistemine binmenizi takviminize bildirerek hesaplanan zamanın değişmesini
-sağlayabilirsiniz.
+Son iki satır bu demonun en önemli kısmı: **aynı girdi, farklı hesap bütçesi,
+farklı karar.** Nokta değer döndüren bir çözücü burada sessizce yanlış cevap
+verirdi.
 
-Ve bu akışı her zaman sunucunuzu takip edenlere verebilirsiniz. Kelimenin tam
-manasıyla, sizin uyuya veya geç kalmanız durumunda buluşmanın veya toplantının
-ne zamana erteleneceğini basit bir formül ile belirleyebilirsiniz. Kutucuklar
-öyle dümdüz hareket etmez. Mesela geç kalma durumunda, buluşmadaki diğer
-kişilerin boşlukları da hesaba katılır. Hatta bu sırada her sunucu aldığı veriyi
-kendikisine göre yorumlayıp yeni tekliflere bulunur! Yani veri hiç bir zaman
-sizden çıkmadan, arkadaşlarınızın takvimleri buluşmayı otomatik olarak
-erteleyebilir.
+## Federasyon: takvim gönderilmez
 
-CTCP sizinle ne kadar entegre olursa o kadar iyi zaman yardımcılığı yapar.
+Bob'un uçları (`src/node.ts`):
 
-Uyumanız gereken saatleri sizin için hesaplayabilir; sisteme dahil edilecek bir
-asistan veya yapay zeka sizin fikirlerinze göre size özel yeni bir takvim
-sistemi kurabilir!
+| Uç | Ne yapar |
+| --- | --- |
+| `GET /ctcp/describe` | düğümün kendini tanımlaması: dallar, link tipleri, bütçe politikası, birim sınıfları |
+| `GET /ctcp/units` | statik uyumluluk tablosu — karşı taraf **offline** çevirebilir |
+| `POST /ctcp/resolve-unit` | dinamik/oracle birim; offline çevrilemez, aralık döner |
+| `POST /ctcp/freebusy` | yalnızca yüklem: "müsait misin?" |
+| `POST /ctcp/proposal` | federe yeniden planlama teklifi |
 
-Doktorunuzla gerekli verileri burdan paylaşabilirsiniz, hatta bu sadece uyku
-için de değil, "kayıt deftleri" mantığı için de kullanılabilir! Diyetisyeninize
-CTCP verinizi ister saatler ve günler olmadan haftalık, ister sadece gün tabanlı
-veya verinin tamamı olacak şekilde verebilirsiniz! Neyi ne kadar sürede
-yediğiniz, veya o an ne yaptığınızı bile kayıt altına alabilirsiniz!
+Gizlilik tek bir primitife bağlı: **yetenek jetonu**. Jeton yoksa ne sorgu ne
+teklif geçer (`401`) — yani teklif spam'i de aynı mekanizmayla kesiliyor, ayrı
+bir itibar sistemi gerekmiyor.
 
-Bu kötü bir şey değil, eğer veriniz sizin elinizde kalırsa bu bir sorundan çok
-güce dönüşür.
+Parmak izine karşı üç önlem birlikte çalışıyor:
 
-**SINIRSIZ FARKINDALIK!**
+- cevaplar 30 dk **ızgaraya dışa doğru** yuvarlanır,
+- aynı yuvarlanmış aralığa tekrar sorgu **önbellekten** aynı cevabı alır ve
+  bütçe yakmaz (5 dakika kaydırarak blok sınırı aranamaz),
+- jeton başına sorgu bütçesi biter (`429`), yani yineleme ile takvim yeniden
+  inşa edilemez.
+
+Karşı tarafın cevabı içerik taşımaz: "busy" der, hangi kutucuk olduğunu
+söylemez. Kabul gerekçesinde de "esnek bir kutucuk yer açtı" yazar, hangisi
+olduğu yazmaz.
+
+Belirsizlik federasyona yayılıyor: Alice bir **pencere** gönderiyorsa Bob tüm
+zarfın güvenli olmasını istiyor. Aralık genişse Bob daha kolay counter atar —
+yani düşük hesap bütçesi doğrudan daha kötü müzakereye dönüşüyor.
+
+## Birim cebri: üç sınıf
+
+`src/units.ts` — karma tabanlı (mixed-radix) bir takvim: `an` → `dilim` (72) →
+`gün` (20) → `devre` (düzensiz tablo: 40/37/41/39/43) → `dönem` (200 gün).
+Sıfır noktası 6 Şubat 2023 04:17.
+
+- **static** — afin + tablo ile bildirilir, sunucuya bağımlılık yok.
+  `1 dilim = 72 an` demek yeterli.
+- **eventually-static** — gözlemlenince sonsuza kadar sabit
+  (`hilal-ayı`: geçmiş aylar önbelleklenebilir, gelecek aylar oracle ister).
+- **dynamic** — her sorguda hesaplanır, offline çevrilemez.
+
+"Yıllar birbirini ittirir" ifadesinin statik hali tam olarak **elde (carry)**:
+düzensiz seviyede taşma arayüzde canlı gösteriliyor. Kaskadın basit hali elde,
+karmaşık hali kısıt çözümü — aynı nesnenin iki modu.
+
+## Bilerek dışarıda bırakılanlar
+
+Demo dürüst olmak için küçük tutuldu. Yok olanlar:
+
+- kalıcılık yok (süreç ölünce durum gider), gerçekte append-only log kalıcı olmalı
+- kimlik/imza yok (jetonlar sabit metin), gerçekte imzalı ve iptal edilebilir olmalı
+- gerçek Wasm/Lua taşıyıcı yok, yerine bütçeli mini bir ifade dili var
+- eş zamanlı çakışan teklif çözümü yazıldı ama arayüzde tetiklenmiyor
+  (`proposalWins`, `src/log.ts`)
+- tek gün, tek eş, tek zincir; DST ve artık saniye yok — çekirdek monoton,
+  takvim dönüşümü sunumda

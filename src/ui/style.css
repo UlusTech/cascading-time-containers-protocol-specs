@@ -1,0 +1,1093 @@
+/*
+ * CTCP demo — görsel dil.
+ *
+ * İki kural taşıyor:
+ *
+ *   1. Renk kesinliktir. Dört kesinlik damgasının dört tonu var; kırmızı
+ *      yalnızca iki yerde görünür (son başlama çizgisi, KARARSIZ). Süs rengi yok.
+ *   2. Tarama belirsizliktir. Dolu yüzey = kesin çekirdek, taralı yüzey = aralık.
+ *      Blok uzadıysa cevap kötüleşmedi; genişledi.
+ *
+ * Tipografi: makinenin sesi eşit genişlikli (başlık, etiket, sayı), insanın
+ * açıklaması gövde yazısı. İkisi bilerek ayrı.
+ */
+
+:root {
+	color-scheme: dark;
+
+	--ink: #0b1215;
+	--panel: #101a20;
+	--sunk: #0c1418;
+	--raise: #16232b;
+	--rail: #1d2c35;
+	--rail-2: #273b47;
+
+	--fg: #dfe8ed;
+	--fg-2: #94a7b3;
+	--fg-3: #667a86;
+
+	--observed: #46c2a0;
+	--derived: #7f9cf0;
+	--truncated: #e0a340;
+	--oracle: #bd85e6;
+	--alarm: #f0604c;
+
+	--mono:
+		ui-monospace, "SFMono-Regular", Menlo, "Cascadia Mono", "Segoe UI Mono",
+		"DejaVu Sans Mono", monospace;
+	--sans:
+		ui-sans-serif, system-ui, "Segoe UI", Roboto, Ubuntu, "Helvetica Neue",
+		Arial, sans-serif;
+
+	/* dakika → piksel. Takvimin tüm geometrisi bu tek sayıdan türer. */
+	--ppm: 1.15px;
+	--radius: 10px;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+/*
+ * `hidden` bu arayüzde görünürlüğün tek primitifi: elemanlar yeniden kurulmak
+ * yerine gizlenip gösteriliyor. Sınıfla verilen `display` tarayıcının varsayılan
+ * [hidden] kuralını yendiği için, display taşıyan sınıflarda geri alınır.
+ */
+.switch[hidden] {
+	display: none;
+}
+
+body {
+	background: var(--ink);
+	color: var(--fg);
+	font-family: var(--sans);
+	font-size: 14px;
+	line-height: 1.55;
+	margin: 0;
+	-webkit-font-smoothing: antialiased;
+}
+
+.page {
+	margin: 0 auto;
+	max-width: 1500px;
+	padding: clamp(16px, 3vw, 34px);
+}
+
+h1,
+h2,
+h3 {
+	font-family: var(--mono);
+	font-weight: 600;
+	margin: 0;
+}
+
+a {
+	color: var(--derived);
+	text-decoration-thickness: 1px;
+	text-underline-offset: 3px;
+}
+
+code {
+	font-family: var(--mono);
+	font-size: 0.92em;
+}
+
+.mono {
+	font-family: var(--mono);
+	font-variant-numeric: tabular-nums;
+}
+
+.eyebrow {
+	color: var(--fg-3);
+	font-family: var(--mono);
+	font-size: 10px;
+	font-weight: 500;
+	letter-spacing: 0.14em;
+	margin: 0;
+	text-transform: uppercase;
+}
+
+/* ---------------------------- sayfa başlığı ---------------------------- */
+
+.page-head {
+	border-bottom: 1px solid var(--rail);
+	margin-bottom: clamp(18px, 3vw, 30px);
+	max-width: 78ch;
+	padding-bottom: clamp(14px, 2vw, 22px);
+}
+
+.page-head h1 {
+	font-size: clamp(23px, 4.2vw, 36px);
+	letter-spacing: -0.025em;
+	margin: 10px 0 8px;
+}
+
+.lede {
+	color: var(--fg-2);
+	margin: 0;
+	max-width: 66ch;
+}
+
+.lede strong {
+	color: var(--fg);
+	font-weight: 600;
+}
+
+.page-links {
+	align-items: baseline;
+	display: flex;
+	flex-wrap: wrap;
+	font-family: var(--mono);
+	font-size: 11px;
+	gap: 16px;
+	margin: 14px 0 0;
+}
+
+.page-hint {
+	color: var(--fg-3);
+}
+
+/* ------------------------------- düzen -------------------------------- */
+
+.sim-grid {
+	display: grid;
+	gap: clamp(18px, 2.5vw, 28px);
+	grid-template-columns: 1fr;
+}
+
+@media (min-width: 1100px) {
+	.sim-grid {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+
+.sim-grid.sim-solo {
+	grid-template-columns: 1fr;
+	max-width: 860px;
+}
+
+.panel {
+	background: var(--panel);
+	border: 1px solid var(--rail);
+	border-radius: var(--radius);
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	padding: clamp(12px, 1.6vw, 18px);
+}
+
+.panel-head {
+	align-items: flex-start;
+	border-bottom: 1px solid var(--rail);
+	display: flex;
+	gap: 12px;
+	justify-content: space-between;
+	padding-bottom: 12px;
+}
+
+.panel-head-main {
+	min-width: 0;
+}
+
+.panel-head-side {
+	align-items: center;
+	display: flex;
+	flex-shrink: 0;
+	gap: 8px;
+}
+
+.panel-title {
+	font-size: 15.5px;
+	letter-spacing: -0.01em;
+	margin: 6px 0 4px;
+}
+
+.panel-meta {
+	color: var(--fg-3);
+	font-size: 10.5px;
+	margin: 0;
+}
+
+.panel-note {
+	color: var(--fg-2);
+	font-size: 11.5px;
+	margin: 6px 0 0;
+}
+
+.banner {
+	background: color-mix(in oklab, var(--alarm) 16%, var(--panel));
+	border: 1px solid var(--alarm);
+	border-radius: 4px;
+	font-family: var(--mono);
+	font-size: 11px;
+	margin: 12px 0 0;
+	padding: 6px 10px;
+}
+
+/* ------------------------- kumanda: yakıt (hero) ----------------------- */
+
+.controls {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	padding: 14px 0;
+}
+
+.fuel {
+	background: var(--sunk);
+	border: 1px solid var(--rail-2);
+	border-radius: 8px;
+	padding: 13px 14px 11px;
+	transition: border-color 0.25s ease;
+}
+
+.fuel.is-truncated {
+	border-color: color-mix(in oklab, var(--truncated) 60%, transparent);
+}
+
+.fuel-top {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px 14px;
+	justify-content: space-between;
+}
+
+.seg {
+	border: 1px solid var(--rail-2);
+	border-radius: 4px;
+	display: flex;
+	overflow: hidden;
+}
+
+.seg-btn {
+	background: transparent;
+	border: 0;
+	border-left: 1px solid var(--rail);
+	color: var(--fg-3);
+	cursor: pointer;
+	font-family: var(--mono);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	padding: 5px 11px;
+	transition:
+		color 0.15s ease,
+		background 0.15s ease;
+}
+
+.seg-btn:first-child {
+	border-left: 0;
+}
+
+.seg-btn:hover {
+	color: var(--fg);
+}
+
+.seg-btn[aria-pressed="true"] {
+	background: color-mix(in oklab, var(--derived) 16%, transparent);
+	box-shadow: inset 0 -2px 0 var(--derived);
+	color: var(--fg);
+}
+
+.meter {
+	background: var(--ink);
+	border: 1px solid var(--rail);
+	border-radius: 2px;
+	height: 6px;
+	margin: 11px 0 12px;
+	overflow: hidden;
+}
+
+.meter-fill {
+	background: var(--derived);
+	display: block;
+	height: 100%;
+	transition:
+		width 0.3s ease,
+		background 0.25s ease;
+	width: 0;
+}
+
+.meter.is-spent .meter-fill {
+	background: var(--truncated);
+}
+
+.fuel-read {
+	align-items: flex-end;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 26px;
+}
+
+.read {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+
+.read-label {
+	color: var(--fg-3);
+	font-family: var(--mono);
+	font-size: 9.5px;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+}
+
+.big-wrap {
+	align-items: baseline;
+	display: flex;
+	gap: 5px;
+}
+
+.big {
+	display: inline-block;
+	font-family: var(--mono);
+	font-size: clamp(30px, 5vw, 42px);
+	font-variant-numeric: tabular-nums;
+	font-weight: 500;
+	letter-spacing: -0.03em;
+	line-height: 1;
+}
+
+.big.flash {
+	animation: bump 0.34s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@keyframes bump {
+	from {
+		opacity: 0.35;
+		transform: translateY(3px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+.unit {
+	color: var(--fg-2);
+	font-family: var(--mono);
+	font-size: 12px;
+}
+
+.stamp {
+	color: var(--tone, var(--fg));
+	font-family: var(--mono);
+	font-size: 14px;
+	font-weight: 500;
+}
+
+.fuel-note {
+	color: var(--fg-3);
+	font-size: 11.5px;
+	margin: 11px 0 0;
+	max-width: 62ch;
+}
+
+/* --------------------------- kumanda: çubuklar ------------------------- */
+
+.bar {
+	border-top: 1px solid var(--rail);
+	display: flex;
+	flex-direction: column;
+	gap: 9px;
+	padding-top: 12px;
+}
+
+.bar-row,
+.chips {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+button {
+	font-family: var(--mono);
+}
+
+.chip,
+.ghost-btn,
+.jump {
+	background: var(--raise);
+	border: 1px solid var(--rail-2);
+	border-radius: 4px;
+	color: var(--fg-2);
+	cursor: pointer;
+	font-size: 11px;
+	padding: 5px 9px;
+	transition:
+		color 0.15s ease,
+		border-color 0.15s ease;
+}
+
+.chip:hover,
+.jump:hover {
+	border-color: var(--fg-3);
+	color: var(--fg);
+}
+
+.primary {
+	background: color-mix(in oklab, var(--derived) 20%, var(--panel));
+	border: 1px solid color-mix(in oklab, var(--derived) 55%, transparent);
+	border-radius: 4px;
+	color: #eaf1ff;
+	cursor: pointer;
+	font-size: 11.5px;
+	padding: 6px 13px;
+	transition: background 0.15s ease;
+}
+
+.primary:hover:not(:disabled) {
+	background: color-mix(in oklab, var(--derived) 32%, var(--panel));
+}
+
+.ghost {
+	background: transparent;
+	border: 1px solid var(--rail-2);
+	border-radius: 4px;
+	color: var(--fg-2);
+	cursor: pointer;
+	font-size: 11px;
+	padding: 6px 11px;
+	transition:
+		color 0.15s ease,
+		border-color 0.15s ease;
+}
+
+.ghost:hover {
+	border-color: var(--fg-3);
+	color: var(--fg);
+}
+
+.ghost.small {
+	font-size: 10.5px;
+	padding: 4px 9px;
+}
+
+button:disabled {
+	cursor: not-allowed;
+	opacity: 0.4;
+}
+
+.field {
+	align-items: center;
+	display: inline-flex;
+	gap: 7px;
+}
+
+.field-label {
+	color: var(--fg-3);
+	font-family: var(--mono);
+	font-size: 9.5px;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+}
+
+.range {
+	align-items: center;
+	color: var(--fg-3);
+	display: inline-flex;
+	font-family: var(--mono);
+	gap: 5px;
+}
+
+.time {
+	background: var(--sunk);
+	border: 1px solid var(--rail-2);
+	border-radius: 3px;
+	color: var(--fg);
+	font-family: var(--mono);
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+	padding: 4px 6px;
+}
+
+.switch {
+	align-items: center;
+	color: var(--fg-2);
+	cursor: pointer;
+	display: inline-flex;
+	font-family: var(--mono);
+	font-size: 11px;
+	gap: 6px;
+}
+
+.switch.small {
+	font-size: 10px;
+}
+
+.box {
+	accent-color: var(--derived);
+	margin: 0;
+}
+
+.controls.busy {
+	opacity: 0.72;
+}
+
+/* ------------------------------- takvim ------------------------------- */
+
+.cal {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding-bottom: 4px;
+}
+
+.cal-grid {
+	display: grid;
+	grid-template-columns: 46px minmax(0, 1fr);
+}
+
+.axis {
+	position: relative;
+}
+
+.tick {
+	position: absolute;
+	right: 8px;
+	top: calc(var(--top) * var(--ppm));
+	transform: translateY(-50%);
+}
+
+.tick-label {
+	color: var(--fg-3);
+	font-family: var(--mono);
+	font-size: 10px;
+	font-variant-numeric: tabular-nums;
+}
+
+.lanes {
+	background-color: var(--sunk);
+	background-image: repeating-linear-gradient(
+		to bottom,
+		var(--rail) 0 1px,
+		transparent 1px calc(60 * var(--ppm))
+	);
+	border: 1px solid var(--rail);
+	border-radius: 4px;
+	height: calc(var(--axis-min) * var(--ppm));
+	position: relative;
+}
+
+.settled {
+	background: color-mix(in oklab, var(--observed) 6%, transparent);
+	border-left: 2px solid color-mix(in oklab, var(--observed) 45%, transparent);
+	height: calc(var(--h) * var(--ppm));
+	left: 0;
+	position: absolute;
+	right: 0;
+	top: calc(var(--top) * var(--ppm));
+	z-index: 1;
+}
+
+.hline {
+	border-top: 1px dashed var(--fg-3);
+	height: 0;
+	left: 0;
+	pointer-events: none;
+	position: absolute;
+	right: 0;
+	top: calc(var(--top) * var(--ppm));
+	z-index: 30;
+}
+
+.hline-tag {
+	background: var(--sunk);
+	color: var(--fg-3);
+	font-family: var(--mono);
+	font-size: 9.5px;
+	letter-spacing: 0.08em;
+	padding: 0 5px;
+	position: absolute;
+	right: 3px;
+	text-transform: uppercase;
+	top: 0;
+	transform: translateY(-50%);
+	white-space: nowrap;
+}
+
+.deadline {
+	border-top-color: var(--alarm);
+	z-index: 31;
+}
+
+.deadline .hline-tag {
+	color: var(--alarm);
+}
+
+.frontier {
+	border-top-style: solid;
+	border-top-color: color-mix(in oklab, var(--observed) 65%, transparent);
+}
+
+.frontier .hline-tag {
+	color: color-mix(in oklab, var(--observed) 80%, var(--fg));
+	left: 3px;
+	right: auto;
+}
+
+/* ------------------------------- bloklar ------------------------------ */
+
+.blk {
+	border-radius: 4px;
+	color: var(--tone, var(--derived));
+	height: calc(var(--h) * var(--ppm));
+	overflow: hidden;
+	position: absolute;
+	top: calc(var(--top) * var(--ppm));
+	transition:
+		top 0.3s cubic-bezier(0.2, 0.7, 0.2, 1),
+		height 0.3s cubic-bezier(0.2, 0.7, 0.2, 1),
+		left 0.2s ease,
+		width 0.2s ease;
+	z-index: 10;
+}
+
+.c-observed {
+	--tone: var(--observed);
+}
+
+.c-derived {
+	--tone: var(--derived);
+}
+
+.c-budget-truncated {
+	--tone: var(--truncated);
+}
+
+.c-needs-oracle {
+	--tone: var(--oracle);
+}
+
+.zone {
+	height: calc(var(--h) * var(--ppm));
+	left: 0;
+	position: absolute;
+	right: 0;
+	top: calc(var(--top) * var(--ppm));
+	transition:
+		top 0.3s cubic-bezier(0.2, 0.7, 0.2, 1),
+		height 0.3s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.z-core {
+	background: color-mix(in oklab, currentColor 24%, transparent);
+	border-left: 3px solid currentColor;
+}
+
+.z-start,
+.z-end {
+	background-image: repeating-linear-gradient(
+		135deg,
+		color-mix(in oklab, currentColor 40%, transparent) 0 1.5px,
+		transparent 1.5px 6px
+	);
+	border-left: 3px solid color-mix(in oklab, currentColor 40%, transparent);
+}
+
+/* çift belirsiz: bitmiş de olabilir, hiç başlamamış da — çapraz tarama */
+.z-fuzzy {
+	background-image:
+		repeating-linear-gradient(
+			135deg,
+			color-mix(in oklab, currentColor 34%, transparent) 0 1.5px,
+			transparent 1.5px 7px
+		),
+		repeating-linear-gradient(
+			45deg,
+			color-mix(in oklab, currentColor 22%, transparent) 0 1.5px,
+			transparent 1.5px 7px
+		);
+	border-left: 3px dashed color-mix(in oklab, currentColor 45%, transparent);
+}
+
+.no-core {
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, currentColor 26%, transparent);
+}
+
+.is-undecided {
+	box-shadow: inset 0 0 0 1px var(--alarm);
+}
+
+.is-lit {
+	box-shadow: 0 0 0 2px var(--fg);
+	z-index: 60;
+}
+
+.blk-body {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	inset: 0;
+	padding: 4px 6px 0 9px;
+	pointer-events: none;
+	position: absolute;
+}
+
+.blk-title {
+	color: color-mix(in oklab, currentColor 55%, var(--fg));
+	font-family: var(--mono);
+	font-size: 11.5px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.blk-time {
+	color: var(--fg-2);
+	font-family: var(--mono);
+	font-size: 10px;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.blk-marks {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 3px;
+	margin-top: 2px;
+}
+
+.badge {
+	align-items: center;
+	border: 1px solid color-mix(in oklab, currentColor 40%, transparent);
+	border-radius: 3px;
+	color: var(--fg-2);
+	display: inline-flex;
+	font-family: var(--mono);
+	font-size: 9px;
+	gap: 3px;
+	letter-spacing: 0.06em;
+	padding: 0 4px;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+
+.badge-loud {
+	background: color-mix(in oklab, var(--alarm) 22%, transparent);
+	border-color: var(--alarm);
+	color: color-mix(in oklab, var(--alarm) 55%, var(--fg));
+	font-weight: 600;
+}
+
+.badge-warn {
+	border-color: var(--truncated);
+	color: color-mix(in oklab, var(--truncated) 55%, var(--fg));
+}
+
+.glyph {
+	flex-shrink: 0;
+}
+
+/* süresi sıfır olan kutucuk: blok değil, işaret */
+.is-milestone {
+	border-top: 2px dashed currentColor;
+	overflow: visible;
+}
+
+.is-milestone::before {
+	background: currentColor;
+	content: "";
+	height: 6px;
+	left: -3px;
+	position: absolute;
+	top: -3px;
+	transform: rotate(45deg);
+	width: 6px;
+}
+
+.is-milestone .zone {
+	display: none;
+}
+
+.is-milestone .blk-body {
+	align-items: baseline;
+	flex-direction: row;
+	gap: 7px;
+	inset: auto 0 0 0;
+	justify-content: flex-end;
+	padding: 0 6px 3px;
+	transform: translateY(-2px);
+}
+
+/* ------------------------------- efsane ------------------------------- */
+
+.legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 14px;
+}
+
+.legend-item {
+	align-items: center;
+	color: var(--fg-3);
+	display: inline-flex;
+	font-family: var(--mono);
+	font-size: 10px;
+	gap: 5px;
+}
+
+.swatch {
+	background: color-mix(in oklab, var(--tone, var(--fg-3)) 70%, transparent);
+	border: 1px solid var(--tone, var(--fg-3));
+	border-radius: 2px;
+	display: inline-block;
+	height: 10px;
+	width: 10px;
+}
+
+.legend-hatch {
+	color: var(--fg-2);
+}
+
+.hatch {
+	background-color: transparent;
+	background-image: repeating-linear-gradient(
+		135deg,
+		currentColor 0 1.5px,
+		transparent 1.5px 5px
+	);
+	border-color: var(--fg-3);
+}
+
+/* ------------------------- gerçekleşmeyenler -------------------------- */
+
+.ghosts {
+	border-top: 1px solid var(--rail);
+	padding: 12px 0 4px;
+}
+
+.ghost-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	list-style: none;
+	margin: 9px 0 0;
+	padding: 0;
+}
+
+.ghost {
+	align-items: baseline;
+	background: var(--sunk);
+	border: 1px solid var(--rail);
+	border-left: 3px solid var(--rail-2);
+	border-radius: 3px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 7px;
+	padding: 5px 9px;
+}
+
+.ghost-cancelled {
+	border-left-color: color-mix(in oklab, var(--alarm) 60%, transparent);
+}
+
+.ghost-x {
+	color: var(--fg-3);
+	font-size: 11px;
+}
+
+.ghost-label {
+	color: var(--fg-2);
+	font-family: var(--mono);
+	font-size: 11.5px;
+	text-decoration: line-through;
+}
+
+.ghost-branch,
+.ghost-arrow {
+	color: var(--fg-3);
+	font-family: var(--mono);
+	font-size: 10px;
+}
+
+.ghost-why {
+	color: var(--fg-3);
+	flex-basis: 100%;
+	font-size: 11px;
+}
+
+.jump {
+	color: var(--derived);
+	font-size: 10.5px;
+	padding: 2px 7px;
+}
+
+.dormant {
+	color: var(--fg-3);
+	font-family: var(--mono);
+	font-size: 10.5px;
+	margin: 9px 0 0;
+}
+
+/* ------------------------------- ayrıntı ------------------------------ */
+
+.detail {
+	border-top: 1px solid var(--rail);
+	margin-top: 4px;
+}
+
+.detail > summary {
+	align-items: baseline;
+	cursor: pointer;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 10px;
+	list-style: none;
+	padding: 11px 0;
+}
+
+.detail > summary::-webkit-details-marker {
+	display: none;
+}
+
+.detail > summary::before {
+	color: var(--fg-3);
+	content: "▸";
+	font-size: 10px;
+}
+
+.detail[open] > summary::before {
+	content: "▾";
+}
+
+.summary-text {
+	color: var(--fg);
+	font-family: var(--mono);
+	font-size: 12px;
+}
+
+.summary-hint {
+	color: var(--fg-3);
+	font-family: var(--mono);
+	font-size: 10px;
+}
+
+.detail-block {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin: 6px 0 18px;
+}
+
+.scroll {
+	max-height: 260px;
+	overflow: auto;
+}
+
+.grid-table {
+	border-collapse: collapse;
+	font-family: var(--mono);
+	font-size: 10.5px;
+	line-height: 1.45;
+	width: 100%;
+}
+
+.grid-table th,
+.grid-table td {
+	border: 1px solid var(--rail);
+	padding: 3px 6px;
+	text-align: left;
+	vertical-align: top;
+}
+
+.grid-table th {
+	background: var(--raise);
+	color: var(--fg-2);
+	font-weight: 500;
+	white-space: nowrap;
+}
+
+.grid-table td {
+	color: var(--fg-2);
+}
+
+.wrap {
+	white-space: pre-wrap;
+}
+
+.tag {
+	color: var(--fg-3);
+	font-size: 9.5px;
+}
+
+.plan-table tr.cancelled td,
+.plan-table tr.skipped td {
+	color: var(--fg-3);
+}
+
+.plan-table tr.undecided td {
+	background: color-mix(in oklab, var(--alarm) 10%, transparent);
+}
+
+.plan-table tr.truncated td {
+	background: color-mix(in oklab, var(--truncated) 9%, transparent);
+}
+
+.note {
+	color: var(--fg-3);
+	font-size: 10.5px;
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.feed {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+pre {
+	background: var(--sunk);
+	border: 1px solid var(--rail);
+	border-radius: 3px;
+	color: var(--fg-2);
+	font-family: var(--mono);
+	font-size: 10.5px;
+	margin: 0;
+	max-height: 230px;
+	overflow: auto;
+	padding: 7px 9px;
+}
+
+.empty {
+	color: var(--fg-3);
+	font-size: 12px;
+	margin: 0;
+	max-width: 60ch;
+}
+
+/* ------------------------------ erişim ------------------------------- */
+
+:focus-visible {
+	outline: 2px solid var(--derived);
+	outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+	:root {
+		--ppm: 0.82px;
+	}
+
+	.cal-grid {
+		grid-template-columns: 38px minmax(0, 1fr);
+	}
+
+	.blk-title {
+		font-size: 10.5px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.blk,
+	.zone,
+	.meter-fill,
+	.big.flash {
+		animation: none;
+		transition: none;
+	}
+}
