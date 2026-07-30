@@ -19,7 +19,8 @@ export type LogKind =
 	| "freebusy-query"
 	| "freebusy-answer"
 	| "capability-denied"
-	| "unit-observed";
+	| "unit-observed"
+	| "plan-moved";
 
 export interface LogEvent {
 	seq: number;

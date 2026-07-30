@@ -108,7 +108,38 @@ const server = Bun.serve({
 				);
 			},
 		},
-		"/api/propose": { POST: async () => asResponse(await core.propose()) },
+		"/api/observe-start": {
+			POST: async (req: Request) => {
+				const b = await readBody(req);
+				return asResponse(
+					core.observeStart(String(b.id ?? ""), Number(b.min ?? 0)),
+				);
+			},
+		},
+		"/api/plan-start": {
+			POST: async (req: Request) => {
+				const b = await readBody(req);
+				return asResponse(
+					core.setPlannedStart(String(b.id ?? ""), Number(b.min ?? 0)),
+				);
+			},
+		},
+		"/api/container": {
+			POST: async (req: Request) =>
+				asResponse(core.addContainer(await readBody(req))),
+			DELETE: async (req: Request) => {
+				const b = await readBody(req);
+				return asResponse(core.removeContainer(String(b.id ?? "")));
+			},
+		},
+		"/api/propose": {
+			POST: async (req: Request) => {
+				const b = await readBody(req);
+				return asResponse(
+					await core.propose(typeof b.start === "number" ? b.start : undefined),
+				);
+			},
+		},
 		"/api/freebusy": {
 			POST: async (req: Request) => {
 				const b = await readBody(req);

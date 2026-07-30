@@ -11,10 +11,17 @@
  * Bloklar her çizimde yeniden kurulmaz: id başına bir eleman tutulur, yalnızca
  * ölçü değişkenleri güncellenir. Yeniden kurulan eleman son geometrisiyle
  * doğar, yani CSS geçişi hiç tetiklenmez ve "uzama" görünmez.
+ *
+ * Etkileşim buradan geçer ama anlamı burada değil: takvim bir bloğun nereye
+ * bırakıldığını bilir, bunun **ne demek olduğunu** `interact.ts` bilir. Blok
+ * bırakıldığı yere iyimser olarak yerleşir; sunucu başka bir vakit dayatırsa
+ * (karşı teklif) oraya kayarak gider — protokolün kullanıcıyı geçtiği an görünür.
  */
 
 import type { ResolvedContainer } from "../types.ts";
+import { createDayHead } from "./dayhead.ts";
 import { h, lockGlyph, replace, span, springGlyph } from "./dom.ts";
+import { type Anchor, createDragLayer, type DragTarget } from "./drag.ts";
 import {
 	CERTAINTY_LABEL,
 	fmt,
@@ -22,6 +29,7 @@ import {
 	fmtInterval,
 	widthOf,
 } from "./format.ts";
+import { DROP_LABEL, type DropKind, dropKindOf } from "./interact.ts";
 import {
 	axisSpan,
 	extentOf,
@@ -44,12 +52,29 @@ type BlockView = {
 	marks: HTMLElement;
 };
 
+/** Takvimin panele geri konuşma yolu; eylemlerin anlamı panelde kararlaşır. */
+export type CalendarHooks = {
+	/** blok bırakıldı: `id` kutucuğu `min` dakikasına taşındı */
+	drop(id: string, min: number): void;
+	/** boş alan: verilen vakitte verilen süreyle yeni kutucuk */
+	create(min: number, minutes: number, at: Anchor): void;
+	/** bloğa tıklandı: ayrıntı balonu */
+	open(id: string, at: Anchor): void;
+	/** sürükleme sürüyor: yoklama durur */
+	hold(on: boolean): void;
+};
+
+export type CalendarOptions = { longPressMs?: number };
+
 export type Calendar = {
 	element: HTMLElement;
 	update(s: StatePayload): void;
 	/** Ölü kutucuk şeridinden gelen "şuna bak" isteği. */
 	highlight(id: string, on: boolean): void;
 	reveal(id: string): void;
+	/** Karşı teklif geldi: blok kısa süre vurgulanır. */
+	flash(id: string): void;
+	stop(): void;
 };
 
 const LEGEND: Array<[string, string]> = [
@@ -70,13 +95,14 @@ function legend(): HTMLElement {
 	);
 }
 
-function blockTitle(c: ResolvedContainer): string {
+function blockTitle(c: ResolvedContainer, kind: DropKind): string {
 	return [
 		c.label,
 		`başlangıç ${fmtInterval(c.start)}  (±${widthOf(c.start)} dk)`,
 		`bitiş     ${fmtInterval(c.end)}  (±${widthOf(c.end)} dk)`,
 		`süre      ${fmtDuration(c.usedDuration)}`,
 		`kesinlik  ${c.certainty}`,
+		kind === "none" ? "taşınamaz" : `sürükle   → ${DROP_LABEL[kind]}`,
 		...c.notes.map((n) => `· ${n}`),
 	].join("\n");
 }
@@ -97,7 +123,12 @@ function createBlock(): BlockView {
 	return { root, zones, title, time, marks };
 }
 
-export function createCalendar(): Calendar {
+const FLASH_MS = 1100;
+
+export function createCalendar(
+	hooks: CalendarHooks,
+	opts: CalendarOptions = {},
+): Calendar {
 	const axisCol = h("div", { class: "axis" });
 	const lanes = h("div", { class: "lanes" });
 	const settled = h("div", { class: "settled", hidden: true });
@@ -114,10 +145,13 @@ export function createCalendar(): Calendar {
 	lanes.append(settled, frontierMark, deadlineMark);
 
 	const grid = h("div", { class: "cal-grid" }, axisCol, lanes);
-	const element = h("section", { class: "cal" }, grid, legend());
+	const head = createDayHead();
+	const element = h("section", { class: "cal" }, head.element, grid, legend());
 
 	const blocks = new Map<string, BlockView>();
 	let axis: Span = { lo: 0, hi: 0 };
+	let state: StatePayload | null = null;
+	const flashTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 	const place = (el: HTMLElement, from: number, to: number): void => {
 		el.style.setProperty("--top", String(from - axis.lo));
@@ -155,12 +189,20 @@ export function createCalendar(): Calendar {
 		const milestone = isMilestone(c);
 		const ext = extentOf(c);
 
-		const cls = ["blk", `c-${c.certainty}`];
+		const kind = dropKindOf(c, meta);
+		// geçici vurgular yeniden çizimde silinmesin (vurgu · karşı teklif)
+		const kept = ["is-lit", "is-counter"].filter((k) =>
+			view.root.classList.contains(k),
+		);
+		const cls = ["blk", `c-${c.certainty}`, ...kept];
 		if (milestone) cls.push("is-milestone");
 		if (c.undecided) cls.push("is-undecided");
 		if (hasNoCore(c) && !milestone) cls.push("no-core");
+		if (kind !== "none") cls.push("can-drag");
 		view.root.className = cls.join(" ");
-		view.root.title = blockTitle(c);
+		view.root.title = blockTitle(c, kind);
+		// klavye: blok odaklanabilir, Enter ayrıntıyı açar (sürükleme fare/dokunma)
+		view.root.tabIndex = kind === "none" ? -1 : 0;
 
 		const geom = milestone
 			? { left: "0px", width: "100%" }
@@ -199,7 +241,82 @@ export function createCalendar(): Calendar {
 		);
 	}
 
+	/**
+	 * Olay hedefinden bloğu bulur. Blokun içi (bölgeler) olayı yakalar, o yüzden
+	 * ağaçta yukarı yürünür; `.lanes`'e varılırsa boş alan sürüklenmiştir.
+	 */
+	function targetOf(el: EventTarget | null): DragTarget | null {
+		let node: Node | null = el instanceof Node ? el : null;
+		while (node && node !== lanes) {
+			const hit = [...blocks.entries()].find(([, v]) => v.root === node);
+			if (hit) {
+				const c = state?.plan.containers.find((x) => x.id === hit[0]);
+				if (!c) return null;
+				const ext = extentOf(c);
+				return {
+					id: c.id,
+					from: c.start.lo,
+					span: Math.max(0, ext.hi - ext.lo),
+					kind: dropKindOf(
+						c,
+						state?.containers.find((m) => m.id === c.id),
+					),
+				};
+			}
+			node = node.parentNode;
+		}
+		return null;
+	}
+
+	const drag = createDragLayer({
+		surface: lanes,
+		axis: () => axis,
+		targetOf,
+		longPressMs: opts.longPressMs,
+		onActive: (on) => {
+			lanes.classList.toggle("is-dragging", on);
+			hooks.hold(on);
+		},
+		onMove: (t, min) => {
+			// iyimser yerleşim: blok bırakıldığı yere gider. Sunucu başka bir
+			// vakit dayatırsa yeniden çizim onu oraya kaydırır (geçiş animasyonu).
+			blocks.get(t.id)?.root.style.setProperty("--top", String(min - axis.lo));
+			hooks.drop(t.id, min);
+		},
+		onTap: (t, at) => hooks.open(t.id, at),
+		onCreate: (min, minutes, at) => hooks.create(min, minutes, at),
+	});
+
+	/** Klavye eşdeğeri: odaklı blokta Enter/Boşluk ayrıntı balonunu açar. */
+	function onKey(e: Event): void {
+		const key = (e as KeyboardEvent).key;
+		if (key !== "Enter" && key !== " ") return;
+		const hit = targetOf(e.target);
+		if (!hit) return;
+		e.preventDefault();
+		const rect = (blocks.get(hit.id)?.root ?? lanes).getBoundingClientRect();
+		hooks.open(hit.id, { x: rect.left, y: rect.bottom });
+	}
+	lanes.addEventListener("keydown", onKey);
+
+	function flash(id: string): void {
+		const view = blocks.get(id);
+		if (!view) return;
+		const prev = flashTimers.get(id);
+		if (prev !== undefined) clearTimeout(prev);
+		view.root.classList.add("is-counter");
+		flashTimers.set(
+			id,
+			setTimeout(() => {
+				view.root.classList.remove("is-counter");
+				flashTimers.delete(id);
+			}, FLASH_MS),
+		);
+	}
+
 	function update(s: StatePayload): void {
+		state = s;
+		head.update(s);
 		const live = s.plan.containers.filter(isLive);
 		const proposer = isProposer(s);
 		const marks: number[] = [];
@@ -250,5 +367,12 @@ export function createCalendar(): Calendar {
 			blocks
 				.get(id)
 				?.root.scrollIntoView({ block: "nearest", behavior: "smooth" }),
+		flash,
+		stop: () => {
+			for (const t of flashTimers.values()) clearTimeout(t);
+			flashTimers.clear();
+			lanes.removeEventListener("keydown", onKey);
+			drag.stop();
+		},
 	};
 }

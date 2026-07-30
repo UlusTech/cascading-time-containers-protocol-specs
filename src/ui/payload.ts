@@ -15,6 +15,27 @@ export type ContainerMeta = {
 	onMiss: string;
 	rigid: boolean;
 	federated: boolean;
+	/** demirlenmiş planlı başlangıç; yoksa başlangıç bağımlılıktan türer */
+	startsAt: number | null;
+	/** senaryodan değil, kullanıcıdan gelen kutucuk — silinebilir */
+	custom: boolean;
+};
+
+/**
+ * Arayüzden gönderilen yeni kutucuk tarifi. Çekirdeğin `addContainer` yüzeyinin
+ * aynası: tam olarak bir demir (`startsAt` YA DA `after`) ve geçerli bir süre
+ * tanımı zorunlu, aksi hâlde `422` döner.
+ */
+export type ContainerSpec = {
+	label: string;
+	startsAt?: number;
+	after?: { id: string; gapLo: number; gapHi: number };
+	duration:
+		| { kind: "fixed"; min: number }
+		| { kind: "contingent"; lo: number; hi: number };
+	onMiss?: "wait" | "cancel";
+	rigid?: boolean;
+	mustStartBefore?: number;
 };
 
 export type CapabilityView = {
@@ -59,6 +80,8 @@ export type StatePayload = {
 		presets: Array<{ label: string; wake: number }>;
 		plannedWake: number;
 		deadline: number;
+		/** sürüklemeyle taşınmış planlı başlangıçlar (id → dakika) */
+		plannedStarts: Record<string, number>;
 	};
 	plan: {
 		containers: ResolvedContainer[];

@@ -15,6 +15,7 @@
 import type { Answer, NodeClient } from "./client.ts";
 import { button, h, replace, span } from "./dom.ts";
 import { CERTAINTY_LABEL, fmt, toMin } from "./format.ts";
+import type { ToastTone } from "./interact.ts";
 import { totalUncertainty } from "./layout.ts";
 import { isProposer, type StatePayload } from "./payload.ts";
 
@@ -22,6 +23,10 @@ import { isProposer, type StatePayload } from "./payload.ts";
 export type PanelBus = {
 	refresh(): Promise<void>;
 	setFedResult(v: Answer | null): void;
+	/** kullanıcıya tek cümlelik geri bildirim */
+	notify(text: string, tone: ToastTone): void;
+	/** balon açık ya da sürükleme sürüyor: yoklama durur */
+	hold(on: boolean): void;
 };
 
 export type Controls = { element: HTMLElement; update(s: StatePayload): void };

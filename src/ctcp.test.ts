@@ -1,10 +1,13 @@
 import { expect, test } from "bun:test";
 import type { ResolveOptions } from "./cascade.ts";
 import { resolve } from "./cascade.ts";
+import { createNodeCore, type NodeCore, type PeerTransport } from "./core.ts";
 import {
 	ALICE_CONTAINERS,
 	FORMULA_DEFS,
 	MEETING_DEADLINE,
+	NODES,
+	type NodeConfig,
 	PLANNED_WAKE,
 } from "./scenario.ts";
 import type { Container } from "./types.ts";
@@ -165,6 +168,105 @@ test("wait dalı ölü bağımlılıkta iptale düşer, 'çözülemedi'ye değil
 	const b = pick(r, "b");
 	expect(b.state).toBe("cancelled");
 	expect(b.notes.join(" ")).not.toContain("çözülemedi");
+});
+
+/* --- çekirdek: sürükleme anlamları --------------------------------- */
+
+function cfgOf(id: string): NodeConfig {
+	const c = NODES[id];
+	if (!c) throw new Error(`senaryo düğümü yok: ${id}`);
+	return c;
+}
+
+/** Sayfa içi simülasyonla aynı: taşıma = doğrudan çağrı. */
+const direct = (peer: () => NodeCore): PeerTransport => ({
+	post: async (path, body) =>
+		(path === "/ctcp/proposal"
+			? peer().ctcpProposal(body)
+			: peer().ctcpFreeBusy(body)
+		).body,
+});
+
+const startOf = (core: NodeCore, id: string) => {
+	const c = core.plan().containers.find((x) => x.id === id);
+	if (!c) throw new Error(`kutucuk yok: ${id}`);
+	return c;
+};
+
+test("observeStart herhangi bir kutucuğu gözlemler ve cepheyi ilerletir", () => {
+	const alice = createNodeCore(cfgOf("alice"));
+	const r = alice.observeStart("hazirlik", 600);
+	expect(r.status).toBe(200);
+	const h = startOf(alice, "hazirlik");
+	expect(h.start).toEqual({ lo: 600, hi: 600 });
+	// kesinlik bileşenlerin en kötüsüdür: gözlenen başlangıç + formül süre = derived
+	expect(h.notes.join(" ")).toContain("gözlem");
+	expect(alice.plan().frontier).toBe(600);
+	expect(alice.observeStart("yok-boyle-kutucuk", 600).status).toBe(404);
+});
+
+test("setPlannedStart startsAt demirli kutucuğu taşır, reset geri alır", () => {
+	const bob = createNodeCore(cfgOf("bob"));
+	expect(bob.setPlannedStart("standup", 700).status).toBe(200);
+	expect(startOf(bob, "standup").start.lo).toBe(700);
+	// senaryo nesnesi mutasyona uğramadı: ikinci çekirdek eski planı görür
+	expect(startOf(createNodeCore(cfgOf("bob")), "standup").start.lo).toBe(570);
+	bob.reset();
+	expect(startOf(bob, "standup").start.lo).toBe(570);
+	// bağımlılıktan türeyen başlangıç taşınamaz
+	const alice = createNodeCore(cfgOf("alice"));
+	expect(alice.setPlannedStart("hazirlik", 700).status).toBe(409);
+});
+
+test("addContainer K1/K2 doğrular, removeContainer yalnızca ekleneni siler", () => {
+	const bob = createNodeCore(cfgOf("bob"));
+	expect(
+		bob.addContainer({ label: "", duration: { kind: "fixed", min: 30 } })
+			.status,
+	).toBe(422);
+	expect(
+		bob.addContainer({
+			label: "iki demir",
+			startsAt: 600,
+			after: { id: "standup", gapLo: 0, gapHi: 0 },
+			duration: { kind: "fixed", min: 30 },
+		}).status,
+	).toBe(422);
+
+	const added = bob.addContainer({
+		label: "Spor",
+		startsAt: 1000,
+		duration: { kind: "fixed", min: 45 },
+		onMiss: "wait",
+	});
+	expect(added.status).toBe(200);
+	const id = String(added.body.id);
+	expect(startOf(bob, id).start.lo).toBe(1000);
+
+	expect(bob.removeContainer("standup").status).toBe(409);
+	expect(bob.removeContainer(id).status).toBe(200);
+	expect(bob.plan().containers.some((c) => c.id === id)).toBe(false);
+});
+
+test("sürükle-teklif: override pencere Bob'a gider, kabul override'ı sabitler", async () => {
+	let bobCore: NodeCore | undefined;
+	const alice = createNodeCore(
+		cfgOf("alice"),
+		direct(() => bobCore as NodeCore),
+	);
+	bobCore = createNodeCore(
+		cfgOf("bob"),
+		direct(() => alice),
+	);
+
+	alice.observe(550); // 09:10
+	// 10:00'a sürükle: zarf 600–660, Bob'un sabit blokları (standup 570–600,
+	// öğle 750–795) ile çakışmaz → kabul + o noktaya sabitleme
+	const r = await alice.propose(600);
+	expect(r.status).toBe(200);
+	const answer = r.body.answer as { decision: string };
+	expect(answer.decision).toBe("accept");
+	expect(startOf(alice, "toplanti").start).toEqual({ lo: 600, hi: 600 });
 });
 
 /* --- birim cebri -------------------------------------------------- */

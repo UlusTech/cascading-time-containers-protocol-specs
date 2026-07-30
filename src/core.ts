@@ -71,6 +71,13 @@ export function createNodeCore(cfg: NodeConfig, transport?: PeerTransport) {
 		/** (jeton, yuvarlanmış aralık) -> cevap. Aynı soru = aynı cevap, bütçe yakmaz. */
 		fbCache: new Map<string, "free" | "busy">(),
 		federation: [] as Array<Record<string, unknown>>,
+		/**
+		 * Sürükleyerek taşınan planlı başlangıçlar. Paylaşılan senaryo nesneleri
+		 * asla mutasyona uğramaz; sıfırlama bu katmanı temizler.
+		 */
+		plannedStarts: {} as Record<string, number>,
+		/** kullanıcının takvime eklediği kutucuklar */
+		extraContainers: [] as Container[],
 	};
 
 	const issueCapabilities = (): void => {
@@ -80,9 +87,22 @@ export function createNodeCore(cfg: NodeConfig, transport?: PeerTransport) {
 	};
 	issueCapabilities();
 
+	/**
+	 * Senaryo kutucukları + kullanıcı ekledikleri + sürüklemeyle taşınmış
+	 * planlı başlangıç katmanı.
+	 */
+	function effectiveContainers(): Container[] {
+		return [...cfg.containers, ...state.extraContainers].map((c) => {
+			const moved = state.plannedStarts[c.id];
+			return moved !== undefined && c.startsAt !== undefined
+				? { ...c, startsAt: moved }
+				: c;
+		});
+	}
+
 	function plan(): ResolveResult {
 		const wake = state.observations.uyanis ?? PLANNED_WAKE;
-		return resolve(cfg.containers, {
+		return resolve(effectiveContainers(), {
 			fuelBudget: state.fuelBudget,
 			observations: state.observations,
 			forcedMiss: state.forcedMiss,
@@ -193,7 +213,7 @@ export function createNodeCore(cfg: NodeConfig, transport?: PeerTransport) {
 		}
 		cap.usedQueries++;
 
-		const blocks = rigidBlocks(cfg.containers, plan());
+		const blocks = rigidBlocks(effectiveContainers(), plan());
 		const answer: "free" | "busy" = blocks.some((b) => overlaps(rounded, b))
 			? "busy"
 			: "free";
@@ -236,7 +256,7 @@ export function createNodeCore(cfg: NodeConfig, transport?: PeerTransport) {
 			{ lamport },
 		);
 
-		const blocks = rigidBlocks(cfg.containers, plan());
+		const blocks = rigidBlocks(effectiveContainers(), plan());
 		/** Belirsizlik federasyona yayılır: tüm zarfın güvenli olması gerekir. */
 		const envelope: Interval = { lo: win.lo, hi: win.hi + duration };
 		const clash = blocks.find((b) => overlaps(envelope, b));
@@ -294,7 +314,12 @@ export function createNodeCore(cfg: NodeConfig, transport?: PeerTransport) {
 
 	const stamp = (): string => new Date().toISOString().slice(11, 19);
 
-	async function propose(): Promise<CoreResult> {
+	/**
+	 * Toplantı teklifi. `startOverride` sürükle-bırak teklifidir: kullanıcı
+	 * bloğu bir vakte bıraktı, pencere o nokta olur; kaskadın hesapladığı
+	 * pencere yerine geçer.
+	 */
+	async function propose(startOverride?: number): Promise<CoreResult> {
 		if (!cfg.peer || !transport)
 			return { status: 400, body: { error: "bu düğümün eşi yok" } };
 		const meeting = plan().containers.find((c) => c.id === "toplanti");
@@ -312,19 +337,25 @@ export function createNodeCore(cfg: NodeConfig, transport?: PeerTransport) {
 			};
 		}
 
+		const window =
+			startOverride !== undefined
+				? { lo: startOverride, hi: startOverride }
+				: meeting.start;
 		const lamport = log.tick();
 		const payload = {
 			token: cfg.heldCapability,
 			from: cfg.id,
 			lamport,
 			containerId: "toplanti",
-			window: meeting.start,
+			window,
 			duration: meeting.usedDuration.lo,
-			certainty: meeting.certainty,
+			certainty: startOverride !== undefined ? "observed" : meeting.certainty,
 		};
 		log.append(
 			"proposal-sent",
-			`teklif → ${cfg.peer.id}: ${fmtInterval(meeting.start)}`,
+			`teklif → ${cfg.peer.id}: ${fmtInterval(window)}${
+				startOverride !== undefined ? " (sürüklendi)" : ""
+			}`,
 			{ lamport },
 		);
 
@@ -359,8 +390,13 @@ export function createNodeCore(cfg: NodeConfig, transport?: PeerTransport) {
 				applied += ` — son başlama vaktini (${fmt(MEETING_DEADLINE)}) geçiyor, kaskad dala düşecek`;
 			}
 		} else if (answer.decision === "accept") {
-			delete state.pins.toplanti;
-			applied = "kabul edildi, pencere korunuyor";
+			if (startOverride !== undefined) {
+				state.pins.toplanti = startOverride;
+				applied = `kabul edildi, toplantı ${fmt(startOverride)} olarak sabitlendi`;
+			} else {
+				delete state.pins.toplanti;
+				applied = "kabul edildi, pencere korunuyor";
+			}
 		}
 		log.append(
 			"decision-received",
@@ -404,13 +440,174 @@ export function createNodeCore(cfg: NodeConfig, transport?: PeerTransport) {
 		return ok(record);
 	}
 
-	function observe(wake: number): CoreResult {
-		state.observations.uyanis = wake;
+	/**
+	 * Gözlem: "bu kutucuk gerçekte şu dakikada başladı". Cephe ilerler,
+	 * akış aşağısı yeniden kaskadlanır. Blok sürüklemenin Alice tarafındaki
+	 * anlamı budur.
+	 */
+	function observeStart(id: string, min: number): CoreResult {
+		if (!effectiveContainers().some((c) => c.id === id)) {
+			return { status: 404, body: { error: `bilinmeyen kutucuk: ${id}` } };
+		}
+		state.observations[id] = min;
 		delete state.pins.toplanti;
 		log.tick();
-		log.append("observation", `uyanış gözlemi: ${fmt(wake)} (cephe ilerledi)`, {
-			wake,
+		log.append("observation", `${id} gözlemi: ${fmt(min)} (cephe ilerledi)`, {
+			id,
+			min,
 		});
+		return ok({ ok: true, plan: plan() });
+	}
+
+	function observe(wake: number): CoreResult {
+		return observeStart("uyanis", wake);
+	}
+
+	/**
+	 * Planlı başlangıcı taşı (yalnızca `startsAt` demirli kutucuklar).
+	 * Gözlem değildir: gelecek plan değişir, cephe ilerlemez. Katman senaryo
+	 * nesnelerini mutasyona uğratmaz; sıfırlama geri alır.
+	 */
+	function setPlannedStart(id: string, min: number): CoreResult {
+		const base = effectiveContainers().find((c) => c.id === id);
+		if (!base) {
+			return { status: 404, body: { error: `bilinmeyen kutucuk: ${id}` } };
+		}
+		if (base.startsAt === undefined) {
+			return {
+				status: 409,
+				body: {
+					error: `'${id}' planlı başlangıç taşımıyor; başlangıcı bağımlılıklarından türer`,
+				},
+			};
+		}
+		state.plannedStarts[id] = min;
+		state.fbCache.clear();
+		log.tick();
+		log.append("plan-moved", `${id} planı ${fmt(min)} vaktine taşındı`, {
+			id,
+			min,
+		});
+		return ok({ ok: true, plan: plan() });
+	}
+
+	/** Kullanıcının takvime eklediği kutucuk tarifi (arayüzden gelir). */
+	interface NewContainerSpec {
+		label: string;
+		/** dakika (gece yarısından) — startsAt demiri */
+		startsAt?: number;
+		/** ya da bağımlılık demiri */
+		after?: { id: string; gapLo: number; gapHi: number };
+		duration:
+			| { kind: "fixed"; min: number }
+			| { kind: "contingent"; lo: number; hi: number };
+		onMiss?: "wait" | "cancel";
+		rigid?: boolean;
+		mustStartBefore?: number;
+	}
+
+	let extraSeq = 0;
+
+	/**
+	 * K1/K2 burada da geçerli: süre tanımı geçerli olmak, her dal tanımlı
+	 * olmak zorunda. Geçersiz tarif kutucuk olmaz, `422` olur.
+	 */
+	function addContainer(raw: Record<string, unknown>): CoreResult {
+		const spec = raw as unknown as NewContainerSpec;
+		const label = String(spec.label ?? "").trim();
+		if (!label) return { status: 422, body: { error: "etiket boş olamaz" } };
+
+		const d = spec.duration;
+		if (!d || (d.kind !== "fixed" && d.kind !== "contingent")) {
+			return {
+				status: 422,
+				body: { error: "süre: fixed veya contingent olmalı" },
+			};
+		}
+		if (d.kind === "fixed" && !(Number(d.min) >= 0)) {
+			return { status: 422, body: { error: "süre negatif olamaz" } };
+		}
+		if (d.kind === "contingent" && !(0 <= Number(d.lo) && d.lo <= d.hi)) {
+			return { status: 422, body: { error: "contingent: 0 <= lo <= hi" } };
+		}
+
+		const hasStart = typeof spec.startsAt === "number";
+		const hasAfter = spec.after !== undefined;
+		if (hasStart === hasAfter) {
+			return {
+				status: 422,
+				body: { error: "tam olarak bir demir gerek: startsAt YA DA after" },
+			};
+		}
+		if (
+			hasAfter &&
+			(!effectiveContainers().some((c) => c.id === spec.after?.id) ||
+				!(Number(spec.after?.gapLo) <= Number(spec.after?.gapHi)))
+		) {
+			return {
+				status: 422,
+				body: { error: "after: geçerli kutucuk + gapLo <= gapHi gerek" },
+			};
+		}
+
+		const id = `ozel-${++extraSeq}-${label
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, "-")
+			.slice(0, 24)}`;
+		const container: Container = {
+			id,
+			label,
+			duration:
+				d.kind === "fixed"
+					? { kind: "fixed", min: Number(d.min) }
+					: { kind: "contingent", lo: Number(d.lo), hi: Number(d.hi) },
+			...(hasStart ? { startsAt: Number(spec.startsAt) } : {}),
+			...(hasAfter && spec.after
+				? {
+						after: {
+							id: spec.after.id,
+							gap: {
+								lo: Number(spec.after.gapLo),
+								hi: Number(spec.after.gapHi),
+							},
+						},
+					}
+				: {}),
+			...(typeof spec.mustStartBefore === "number"
+				? { mustStartBefore: spec.mustStartBefore }
+				: {}),
+			onMiss: { kind: spec.onMiss === "wait" ? "wait" : "cancel" },
+			rigid: Boolean(spec.rigid),
+		};
+		state.extraContainers.push(container);
+		state.fbCache.clear();
+		log.tick();
+		log.append("plan-moved", `yeni kutucuk: '${label}' (${id})`, { id });
+		return ok({ ok: true, id, plan: plan() });
+	}
+
+	/** Yalnızca kullanıcı eklediği kutucuklar silinebilir; bağımlısı varsa 409. */
+	function removeContainer(id: string): CoreResult {
+		if (!state.extraContainers.some((c) => c.id === id)) {
+			return {
+				status: 409,
+				body: { error: "yalnızca sonradan eklenen kutucuklar silinebilir" },
+			};
+		}
+		const dependent = effectiveContainers().find((c) => c.after?.id === id);
+		if (dependent) {
+			return {
+				status: 409,
+				body: { error: `önce bağımlısını sil: ${dependent.id}` },
+			};
+		}
+		state.extraContainers = state.extraContainers.filter((c) => c.id !== id);
+		delete state.observations[id];
+		delete state.plannedStarts[id];
+		state.forcedMiss = state.forcedMiss.filter((x) => x !== id);
+		state.fbCache.clear();
+		log.tick();
+		log.append("plan-moved", `kutucuk silindi: ${id}`, { id });
 		return ok({ ok: true, plan: plan() });
 	}
 
@@ -445,6 +642,8 @@ export function createNodeCore(cfg: NodeConfig, transport?: PeerTransport) {
 		state.observations = {};
 		state.forcedMiss = [];
 		state.pins = {};
+		state.plannedStarts = {};
+		state.extraContainers = [];
 		state.fbCache.clear();
 		state.federation = [];
 		state.issued.clear();
@@ -498,14 +697,17 @@ export function createNodeCore(cfg: NodeConfig, transport?: PeerTransport) {
 				presets: PRESETS,
 				plannedWake: PLANNED_WAKE,
 				deadline: MEETING_DEADLINE,
+				plannedStarts: state.plannedStarts,
 			},
 			plan: plan(),
-			containers: cfg.containers.map((c) => ({
+			containers: effectiveContainers().map((c) => ({
 				id: c.id,
 				kind: c.duration.kind,
 				onMiss: c.onMiss?.kind ?? "cancel",
 				rigid: Boolean(c.rigid),
 				federated: Boolean(c.federated),
+				startsAt: c.startsAt ?? null,
+				custom: state.extraContainers.some((x) => x.id === c.id),
 			})),
 			capabilities: {
 				held: cfg.heldCapability ?? null,
@@ -546,6 +748,10 @@ export function createNodeCore(cfg: NodeConfig, transport?: PeerTransport) {
 		propose,
 		queryFreeBusy,
 		observe,
+		observeStart,
+		setPlannedStart,
+		addContainer,
+		removeContainer,
 		forceMiss,
 		setFuel,
 		observeHilal,

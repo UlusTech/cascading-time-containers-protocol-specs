@@ -53,7 +53,8 @@
  * yerine gizlenip gösteriliyor. Sınıfla verilen `display` tarayıcının varsayılan
  * [hidden] kuralını yendiği için, display taşıyan sınıflarda geri alınır.
  */
-.switch[hidden] {
+.switch[hidden],
+.pop[hidden] {
 	display: none;
 }
 
@@ -535,6 +536,77 @@ button:disabled {
 	padding-bottom: 4px;
 }
 
+/* ---------------------------- gün başlığı ---------------------------- */
+
+/*
+ * Sütunun tepesine yapışır. İkinci satır günün durumunu taşır (cephe · damga ·
+ * belirsizlik) ve blokların rengiyle aynı dili konuşur: damga sözcüğü, o an
+ * takvimde baskın olan tonun rengindedir.
+ */
+.cal-head {
+	backdrop-filter: blur(6px);
+	background: color-mix(in oklab, var(--panel) 88%, transparent);
+	border-bottom: 1px solid var(--rail);
+	margin: 0 0 2px;
+	padding: 8px 0 7px;
+	position: sticky;
+	top: 0;
+	z-index: 45;
+}
+
+.cal-head-row {
+	align-items: baseline;
+	display: flex;
+	gap: 8px;
+}
+
+.day-name {
+	color: var(--fg);
+	font-family: var(--mono);
+	font-size: 13px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	text-transform: capitalize;
+}
+
+.day-date {
+	color: var(--fg-3);
+	font-family: var(--mono);
+	font-size: 11px;
+}
+
+/* "bugün" işareti: tek nokta, sözcük gerekmez */
+.day-dot {
+	background: var(--observed);
+	border-radius: 50%;
+	height: 5px;
+	margin-bottom: 2px;
+	width: 5px;
+}
+
+.cal-strip {
+	align-items: baseline;
+	color: var(--fg-3);
+	display: flex;
+	flex-wrap: wrap;
+	font-family: var(--mono);
+	font-size: 10px;
+	gap: 3px 12px;
+	margin-top: 3px;
+}
+
+.strip-item {
+	font-variant-numeric: tabular-nums;
+}
+
+.strip-stamp {
+	color: var(--tone, var(--fg-2));
+}
+
+.strip-spread {
+	color: var(--fg-2);
+}
+
 .cal-grid {
 	display: grid;
 	grid-template-columns: 46px minmax(0, 1fr);
@@ -567,8 +639,24 @@ button:disabled {
 	);
 	border: 1px solid var(--rail);
 	border-radius: 4px;
+	cursor: crosshair;
 	height: calc(var(--axis-min) * var(--ppm));
 	position: relative;
+	/*
+	 * `pan-y`, `none` değil: dokunmatikte takvimin üstünden parmakla geçip sayfayı
+	 * kaydırmak mümkün kalmalı. Sürükleme uzun basışla kurulur ve ancak o zaman
+	 * hareket iptal edilir (bkz. drag.ts).
+	 */
+	touch-action: pan-y;
+}
+
+/*
+ * Sürükleme sürerken bloklar geri çekilir, hayalet öne çıkar. Değer bir özel
+ * değişkenle iniyor: `.lanes.is-dragging .blk` gibi torun seçici, `.blk`in
+ * kendisinden daha özgül olur ve sonraki kuralları sessizce yenerdi.
+ */
+.lanes.is-dragging {
+	--blk-dim: 0.5;
 }
 
 .settled {
@@ -576,6 +664,8 @@ button:disabled {
 	border-left: 2px solid color-mix(in oklab, var(--observed) 45%, transparent);
 	height: calc(var(--h) * var(--ppm));
 	left: 0;
+	/* dekoratif: boş alana basmayı engellememeli (yeni kutucuk sürüklemesi) */
+	pointer-events: none;
 	position: absolute;
 	right: 0;
 	top: calc(var(--top) * var(--ppm));
@@ -634,6 +724,7 @@ button:disabled {
 	border-radius: 4px;
 	color: var(--tone, var(--derived));
 	height: calc(var(--h) * var(--ppm));
+	opacity: var(--blk-dim, 1);
 	overflow: hidden;
 	position: absolute;
 	top: calc(var(--top) * var(--ppm));
@@ -641,7 +732,8 @@ button:disabled {
 		top 0.3s cubic-bezier(0.2, 0.7, 0.2, 1),
 		height 0.3s cubic-bezier(0.2, 0.7, 0.2, 1),
 		left 0.2s ease,
-		width 0.2s ease;
+		width 0.2s ease,
+		opacity 0.15s ease;
 	z-index: 10;
 }
 
@@ -714,6 +806,46 @@ button:disabled {
 .is-lit {
 	box-shadow: 0 0 0 2px var(--fg);
 	z-index: 60;
+}
+
+.can-drag {
+	cursor: grab;
+	/* blokun üstünden de sayfa kaydırılabilir; sürükleme uzun basışla kurulur */
+	touch-action: pan-y;
+}
+
+/*
+ * Tutulabilirlik `outline` ile söylenir, `box-shadow` ile değil: gölge KARARSIZ
+ * ve çekirdeksiz bloklardaki uyarı halkasını taşıyor ve torun seçici sıradan
+ * bağımsız olarak onu yenerdi. Uyarı hiçbir hâlde kaybolmamalı.
+ */
+.can-drag:hover {
+	outline: 1px solid color-mix(in oklab, currentColor 55%, transparent);
+	outline-offset: -1px;
+}
+
+/*
+ * Karşı teklif: blok bırakıldığı yere değil, karşı düğümün dediği yere oturdu.
+ * Kayma `top` geçişinden gelir; buradaki nabız yalnızca "bu senin kararın
+ * değildi" der.
+ */
+.is-counter {
+	animation: counter-pulse 1.1s ease-out;
+	z-index: 55;
+}
+
+@keyframes counter-pulse {
+	0% {
+		box-shadow: 0 0 0 2px var(--oracle);
+	}
+
+	70% {
+		box-shadow: 0 0 0 2px color-mix(in oklab, var(--oracle) 45%, transparent);
+	}
+
+	100% {
+		box-shadow: 0 0 0 2px transparent;
+	}
 }
 
 .blk-body {
@@ -812,6 +944,338 @@ button:disabled {
 	justify-content: flex-end;
 	padding: 0 6px 3px;
 	transform: translateY(-2px);
+}
+
+/* --------------------------- sürükleme hayaleti ----------------------- */
+
+/*
+ * Ton = bırakınca oluşacak kesinlik damgasının rengi. Kullanıcı bırakmadan önce
+ * hareketinin ne anlama geldiğini renkten okur:
+ *
+ *   yeşil  gözlem  → damga `observed` olacak, cephe ilerleyecek
+ *   mavi   plan    → damga `derived` kalacak, yalnızca demir taşınacak
+ *   mor    teklif  → cevabı karşı düğüm verecek
+ */
+.t-observed {
+	--tone: var(--observed);
+}
+
+.t-derived {
+	--tone: var(--derived);
+}
+
+.t-needs-oracle {
+	--tone: var(--oracle);
+}
+
+.t-new {
+	--tone: var(--fg-2);
+}
+
+.drag-ghost {
+	background-image: repeating-linear-gradient(
+		135deg,
+		color-mix(in oklab, var(--tone, var(--fg-2)) 26%, transparent) 0 1.5px,
+		transparent 1.5px 6px
+	);
+	border: 1px dashed var(--tone, var(--fg-2));
+	border-radius: 4px;
+	height: calc(var(--h) * var(--ppm));
+	left: 0;
+	pointer-events: none;
+	position: absolute;
+	right: 0;
+	top: calc(var(--top) * var(--ppm));
+	z-index: 70;
+}
+
+/* Saat etiketi üst kenara oturur — bırakılacak dakika oradan okunur. */
+.drag-chip {
+	align-items: baseline;
+	background: var(--ink);
+	border: 1px solid var(--tone, var(--fg-2));
+	border-radius: 3px;
+	color: color-mix(in oklab, var(--tone, var(--fg-2)) 45%, var(--fg));
+	display: inline-flex;
+	font-family: var(--mono);
+	font-size: 10.5px;
+	font-variant-numeric: tabular-nums;
+	left: 6px;
+	padding: 1px 6px;
+	position: absolute;
+	top: 0;
+	transform: translateY(-50%);
+	white-space: nowrap;
+}
+
+/* ---------------------------- bildirimler ---------------------------- */
+
+/*
+ * Panelin dibine yapışır: iki panel yan yanayken ekrana sabitlenen bir yığın
+ * birbirinin üstüne binerdi. En yenisi üstte.
+ */
+.toasts:empty {
+	display: none;
+}
+
+.toasts {
+	bottom: 10px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-top: 8px;
+	pointer-events: none;
+	position: sticky;
+	z-index: 60;
+}
+
+.toast {
+	animation: toast-in 0.2s cubic-bezier(0.2, 0.7, 0.2, 1);
+	background: color-mix(in oklab, var(--raise) 94%, var(--ink));
+	border: 1px solid var(--rail-2);
+	border-left: 3px solid var(--tone, var(--fg-2));
+	border-radius: 4px;
+	box-shadow: 0 8px 20px rgb(0 0 0 / 40%);
+	color: var(--fg-2);
+	font-family: var(--mono);
+	font-size: 11px;
+	line-height: 1.45;
+	margin: 0;
+	padding: 7px 10px;
+}
+
+.toast-ok {
+	--tone: var(--observed);
+}
+
+.toast-warn {
+	--tone: var(--oracle);
+}
+
+.toast-bad {
+	--tone: var(--alarm);
+}
+
+@keyframes toast-in {
+	from {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+/* ------------------------------- balonlar ----------------------------- */
+
+.pop {
+	background: var(--panel);
+	border: 1px solid var(--rail-2);
+	border-radius: 6px;
+	box-shadow: 0 18px 44px rgb(0 0 0 / 55%);
+	display: flex;
+	flex-direction: column;
+	max-height: min(78vh, 560px);
+	position: fixed;
+	width: min(296px, calc(100vw - 20px));
+	z-index: 90;
+}
+
+.pop-head {
+	align-items: center;
+	border-bottom: 1px solid var(--rail);
+	display: flex;
+	gap: 8px;
+	justify-content: space-between;
+	padding: 8px 8px 8px 11px;
+}
+
+.pop-title {
+	color: var(--fg);
+	font-family: var(--mono);
+	font-size: 11.5px;
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.pop-x {
+	background: transparent;
+	border: 0;
+	color: var(--fg-3);
+	cursor: pointer;
+	font-size: 11px;
+	line-height: 1;
+	padding: 3px 4px;
+}
+
+.pop-x:hover {
+	color: var(--fg);
+}
+
+.pop-body {
+	overflow: auto;
+	padding: 10px 11px 12px;
+}
+
+.pop-form {
+	display: flex;
+	flex-direction: column;
+	gap: 9px;
+}
+
+.pop-row {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.pop-row[hidden] {
+	display: none;
+}
+
+.pop-row-body {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 5px 8px;
+}
+
+.pop-inline {
+	align-items: center;
+	color: var(--fg-3);
+	display: inline-flex;
+	font-family: var(--mono);
+	font-size: 10.5px;
+	gap: 4px;
+	transition: opacity 0.15s ease;
+}
+
+/* Seçilmeyen dal görünür kalır ama geri çekilir: form tek bakışta okunur. */
+.pop-inline.is-off {
+	opacity: 0.38;
+}
+
+.pop-radio {
+	font-size: 10.5px;
+}
+
+.pop-hint {
+	color: var(--fg-3);
+	font-family: var(--mono);
+	font-size: 9.5px;
+}
+
+.text,
+.select,
+.num {
+	background: var(--sunk);
+	border: 1px solid var(--rail-2);
+	border-radius: 3px;
+	color: var(--fg);
+	font-family: var(--mono);
+	font-size: 11.5px;
+	padding: 4px 6px;
+}
+
+.text {
+	width: 100%;
+}
+
+.num {
+	font-variant-numeric: tabular-nums;
+	width: 58px;
+}
+
+.select {
+	max-width: 150px;
+}
+
+.pop-foot {
+	align-items: center;
+	border-top: 1px solid var(--rail);
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 3px;
+	padding-top: 10px;
+}
+
+.pop-error {
+	color: color-mix(in oklab, var(--alarm) 65%, var(--fg));
+	flex-basis: 100%;
+	font-family: var(--mono);
+	font-size: 10.5px;
+	margin: 0;
+}
+
+.pop-error[hidden] {
+	display: none;
+}
+
+.danger {
+	background: color-mix(in oklab, var(--alarm) 14%, var(--panel));
+	border: 1px solid color-mix(in oklab, var(--alarm) 50%, transparent);
+	border-radius: 4px;
+	color: color-mix(in oklab, var(--alarm) 45%, var(--fg));
+	cursor: pointer;
+	font-size: 11px;
+	padding: 5px 11px;
+}
+
+.danger:hover:not(:disabled) {
+	background: color-mix(in oklab, var(--alarm) 24%, var(--panel));
+}
+
+/* --------------------------- blok ayrıntısı --------------------------- */
+
+.info-line {
+	border-bottom: 1px solid var(--rail);
+	display: flex;
+	gap: 10px;
+	justify-content: space-between;
+	padding: 4px 0;
+}
+
+.info-key {
+	color: var(--fg-3);
+	font-family: var(--mono);
+	font-size: 9.5px;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+}
+
+.info-val {
+	color: var(--fg);
+	font-family: var(--mono);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+.info-tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin: 9px 0 4px;
+}
+
+.info-note {
+	color: var(--fg-3);
+	font-size: 11px;
+	margin: 7px 0 0;
+}
+
+/* Sürüklemenin anlamı: rengi, bırakınca oluşacak damganın rengi. */
+.info-drag {
+	border-left: 2px solid var(--tone, var(--fg-3));
+	color: var(--fg-2);
+	font-size: 11px;
+	margin: 9px 0 0;
+	padding-left: 8px;
 }
 
 /* ------------------------------- efsane ------------------------------- */
@@ -1086,7 +1550,10 @@ pre {
 	.blk,
 	.zone,
 	.meter-fill,
-	.big.flash {
+	.big.flash,
+	.toast,
+	.is-counter,
+	.pop-inline {
 		animation: none;
 		transition: none;
 	}
