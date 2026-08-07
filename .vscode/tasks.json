@@ -1,0 +1,38 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "typecheck:watch",
+            "detail": "Whole-project type check, TS 7, watch mode",
+            "type": "shell",
+            "command": "bun run typecheck:watch",
+            "options": { "cwd": "${workspaceFolder}" },
+            "isBackground": true,
+            "problemMatcher": "$tsc-watch",
+            "runOptions": {
+                "runOn": "folderOpen",
+                "instanceLimit": 1
+            },
+            "icon": { "id": "type-hierarchy" },
+            "presentation": {
+                "reveal": "silent",
+                "revealProblems": "onProblem",
+                "panel": "dedicated",
+                "echo": false,
+                "showReuseMessage": false,
+                "clear": true,
+                "close": false
+            }
+        },
+        {
+            "label": "typecheck",
+            "detail": "One-shot type check",
+            "type": "shell",
+            "command": "bun run typecheck",
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": "$tsc",
+            "group": { "kind": "build", "isDefault": true },
+            "presentation": { "reveal": "always", "panel": "dedicated" }
+        }
+    ]
+}
