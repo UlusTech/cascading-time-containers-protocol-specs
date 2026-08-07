@@ -32,7 +32,11 @@
             "options": { "cwd": "${workspaceFolder}" },
             "problemMatcher": "$tsc",
             "group": { "kind": "build", "isDefault": true },
-            "presentation": { "reveal": "always", "panel": "dedicated" }
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "focus": false
+            }
         }
     ]
 }
