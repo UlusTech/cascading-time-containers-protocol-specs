@@ -1,8 +1,8 @@
 {
 	"$schema": "./node_modules/lefthook/schema.json",
 	"assert_lefthook_installed": true,
+	"output": ["failure"],
 	"pre-commit": {
-		"parallel": true,
 		"jobs": [
 			{
 				"name": "biome",
@@ -19,7 +19,7 @@
 					"*.jsonc",
 					"*.css"
 				],
-				"run": "node_modules/.bin/biome check --write --no-errors-on-unmatched {staged_files}",
+				"run": "node_modules/.bin/biome check --write --no-errors-on-unmatched --files-ignore-unknown=true --reporter=concise {staged_files}",
 				"stage_fixed": true,
 				"fail_text": "Biome found problems it cannot fix automatically."
 			}
