@@ -1,0 +1,37 @@
+{
+	"$schema": "./node_modules/lefthook/schema.json",
+	"assert_lefthook_installed": true,
+	"pre-commit": {
+		"parallel": true,
+		"jobs": [
+			{
+				"name": "biome",
+				"glob": [
+					"*.ts",
+					"*.tsx",
+					"*.mts",
+					"*.cts",
+					"*.js",
+					"*.jsx",
+					"*.mjs",
+					"*.cjs",
+					"*.json",
+					"*.jsonc",
+					"*.css"
+				],
+				"run": "node_modules/.bin/biome check --write --no-errors-on-unmatched {staged_files}",
+				"stage_fixed": true,
+				"fail_text": "Biome found problems it cannot fix automatically."
+			}
+		]
+	},
+	"pre-push": {
+		"jobs": [
+			{
+				"name": "check",
+				"run": "bun run check",
+				"fail_text": "Push blocked. Fix `bun run check` first, or use --no-verify if you mean it."
+			}
+		]
+	}
+}

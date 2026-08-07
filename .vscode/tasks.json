@@ -1,42 +1,87 @@
 {
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "typecheck:watch",
-            "detail": "Whole-project type check, TS 7, watch mode",
-            "type": "shell",
-            "command": "bun run typecheck:watch",
-            "options": { "cwd": "${workspaceFolder}" },
-            "isBackground": true,
-            "problemMatcher": "$tsc-watch",
-            "runOptions": {
-                "runOn": "folderOpen",
-                "instanceLimit": 1
-            },
-            "icon": { "id": "type-hierarchy" },
-            "presentation": {
-                "reveal": "silent",
-                "revealProblems": "onProblem",
-                "panel": "dedicated",
-                "echo": false,
-                "showReuseMessage": false,
-                "clear": true,
-                "close": false
-            }
-        },
-        {
-            "label": "typecheck",
-            "detail": "One-shot type check",
-            "type": "shell",
-            "command": "bun run typecheck",
-            "options": { "cwd": "${workspaceFolder}" },
-            "problemMatcher": "$tsc",
-            "group": { "kind": "build", "isDefault": true },
-            "presentation": {
-                "reveal": "always",
-                "panel": "dedicated",
-                "focus": false
-            }
-        }
-    ]
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "typecheck:watch",
+			"detail": "Whole-project type check, TS 7, watch mode",
+			"type": "shell",
+			"command": "bun run typecheck:watch",
+			"options": { "cwd": "${workspaceFolder}" },
+			"isBackground": true,
+			"problemMatcher": "$tsc-watch",
+			"runOptions": {
+				"runOn": "folderOpen",
+				"instanceLimit": 1
+			},
+			"icon": { "id": "type-hierarchy" },
+			"presentation": {
+				"reveal": "silent",
+				"revealProblems": "onProblem",
+				"panel": "dedicated",
+				"echo": false,
+				"showReuseMessage": false,
+				"clear": true,
+				"close": false
+			}
+		},
+		{
+			"label": "lint:watch",
+			"detail": "Whole-workspace Biome lint + format, watch mode",
+			"type": "shell",
+			"command": "test -x node_modules/.bin/biome-watch || echo '::error title=biome-watch/setup,file=package.json,line=1,endLine=1,col=1,endColumn=1::biome-watch is not installed — run bun install'; bun run lint:watch",
+			"options": { "cwd": "${workspaceFolder}" },
+			"isBackground": true,
+			"problemMatcher": {
+				"owner": "biome",
+				"source": "biome",
+				"applyTo": "closedDocuments",
+				"fileLocation": ["relative", "${workspaceFolder}"],
+				"pattern": {
+					"regexp": "^::(warning|error|notice)\\s+title=([^,]+),file=([^,]+),line=(\\d+),endLine=(\\d+),col=(\\d+),endColumn=(\\d+)::(.*)$",
+					"severity": 1,
+					"code": 2,
+					"file": 3,
+					"line": 4,
+					"endLine": 5,
+					"column": 6,
+					"endColumn": 7,
+					"message": 8
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": "^biome-watch: check starting$",
+					"endsPattern": "^biome-watch: check finished$"
+				}
+			},
+			"runOptions": {
+				"runOn": "folderOpen",
+				"instanceLimit": 1
+			},
+			"icon": { "id": "paintcan" },
+			"presentation": {
+				"reveal": "silent",
+				"revealProblems": "onProblem",
+				"panel": "dedicated",
+				"echo": false,
+				"focus": false,
+				"showReuseMessage": false,
+				"clear": true,
+				"close": false
+			}
+		},
+		{
+			"label": "typecheck",
+			"detail": "One-shot type check",
+			"type": "shell",
+			"command": "bun run typecheck",
+			"options": { "cwd": "${workspaceFolder}" },
+			"problemMatcher": "$tsc",
+			"group": { "kind": "build", "isDefault": true },
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"focus": false
+			}
+		}
+	]
 }
