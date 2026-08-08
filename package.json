@@ -4,14 +4,15 @@
 	"type": "module",
 	"private": true,
 	"scripts": {
-		"start": "bun run src/main.ts",
 		"dev": "bun --watch src/main.ts",
+		"start": "bun run src/main.ts",
 		"typecheck": "tsc --noEmit",
 		"typecheck:watch": "tsc --noEmit --watch --preserveWatchOutput",
 		"lint": "biome check",
 		"lint:watch": "biome-watch",
-		"test": "bun test",
+		"format": "biome check --write",
 		"check": "bun run typecheck && bun run lint",
+		"test": "bun test",
 		"prepare": "lefthook install"
 	},
 	"devDependencies": {
