@@ -10,6 +10,7 @@
 		"typecheck:watch": "tsc --noEmit --watch --preserveWatchOutput",
 		"lint": "biome check",
 		"lint:watch": "biome-watch",
+		"test": "bun test",
 		"check": "bun run typecheck && bun run lint",
 		"prepare": "lefthook install"
 	},
