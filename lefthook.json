@@ -26,11 +26,60 @@
 		]
 	},
 	"pre-push": {
+		"parallel": true,
 		"jobs": [
 			{
-				"name": "check",
-				"run": "bun run check",
-				"fail_text": "Push blocked. Fix `bun run check` first, or use --no-verify if you mean it."
+				"name": "typecheck",
+				"glob": [
+					"*.ts",
+					"*.tsx",
+					"*.mts",
+					"*.cts",
+					"*.js",
+					"*.jsx",
+					"*.mjs",
+					"*.cjs",
+					"*.json",
+					"bun.lock"
+				],
+				"run": "bun run typecheck",
+				"fail_text": "Push blocked. Type errors."
+			},
+			{
+				"name": "lint",
+				"glob": [
+					"*.ts",
+					"*.tsx",
+					"*.mts",
+					"*.cts",
+					"*.js",
+					"*.jsx",
+					"*.mjs",
+					"*.cjs",
+					"*.json",
+					"*.jsonc",
+					"*.css"
+				],
+				"run": "bun run lint",
+				"fail_text": "Push blocked. Lint errors."
+			},
+			{
+				"name": "test",
+				"glob": [
+					"*.ts",
+					"*.tsx",
+					"*.mts",
+					"*.cts",
+					"*.js",
+					"*.jsx",
+					"*.mjs",
+					"*.cjs",
+					"*.json",
+					"*.jsonc",
+					"bun.lock"
+				],
+				"run": "bun run test --pass-with-no-tests -t '#prepush'",
+				"fail_text": "Push blocked. A #prepush test is failing."
 			}
 		]
 	}
