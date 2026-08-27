@@ -1,9 +1,12 @@
 {
 	"js/ts.experimental.useTsgo": true,
 	"editor.defaultFormatter": "biomejs.biome",
+	"[xml]": {
+		"editor.defaultFormatter": "redhat.vscode-xml"
+	},
 	"editor.formatOnSave": true,
 	"editor.codeActionsOnSave": {
-		"source.fixAll.biome": "explicit",
-		"source.organizeImports.biome": "explicit"
+		"source.fixAll.biome": "always",
+		"source.organizeImports.biome": "always"
 	}
 }
