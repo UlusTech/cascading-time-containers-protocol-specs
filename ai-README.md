@@ -17,6 +17,8 @@ Not a schema. Not normative. A drawing of the idea.
 Each file is self-contained: a `<projection>` (what an engine draws) followed
 by the `<store>` rows that produced it.
 
+See [ai-diagrams.md](./ai-diagrams.md).
+
 ## Notation
 
 ```

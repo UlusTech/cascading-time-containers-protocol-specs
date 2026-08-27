@@ -13,9 +13,9 @@
 <ctcp-example name="capacity">
 
     <!--
-  ========== the two capacity containers ==========
-  Ordinal projections. No time here — these say WHAT competes, not WHEN.
--->
+      ========== the two capacity containers ==========
+      Ordinal projections. No time here — these say WHAT competes, not WHEN.
+    -->
 
     <projection space="work-capacity">
         <container id="work-capacity" name="Bir şey üstünde çalışmaya uygunluğu">
@@ -35,18 +35,18 @@
                 <container id="sleep" name="Uyku" slot="1" />
                 <container id="check-messages" name="Mesajlara bak" slot="2" time="floating" />
                 <!--
-          toilet is NOT here. fiziksel olarak imkanlı.
-          One membership difference produces the whole rule.
-        -->
+                  toilet is NOT here. fiziksel olarak imkanlı.
+                  One membership difference produces the whole rule.
+                -->
             </cascade>
         </container>
     </projection>
 
 
     <!--
-  ========== what the engine reads to auto-place ==========
-  work-capacity's occupants, projected onto time. The gaps are the answer.
--->
+      ========== what the engine reads to auto-place ==========
+      work-capacity's occupants, projected onto time. The gaps are the answer.
+    -->
     <projection space="time" window="2026/08/27">
         <container id="time" name="Time">
             <cascade>
@@ -71,45 +71,45 @@
                                                 <container kind="utc-minute" key="0">
                                                     <container id="sleep" name="Uyku" point="end" />
                                                     <!-- solved, not authored. the engine put it
-                                                    here. -->
-                                                    <container id="tidy-house" name="Evi Topla"
-                                                        point="start" solved="true" />
-                                                </container>
-                                                <!-- ... -->
-                                                <container kind="utc-minute" key="45">
-                                                    <container id="tidy-house" name="Evi Topla"
-                                                        point="end" solved="true" />
-                                                </container>
-                                            </cascade>
-                                        </container>
-                                        <!-- ... -->
+                                                                                            here. -->
+                                                                                            <container id="tidy-house" name="Evi Topla"
+                                                                                                point="start" solved="true" />
+                                                                                        </container>
+                                                                                        <!-- ... -->
+                                                                                        <container kind="utc-minute" key="45">
+                                                                                            <container id="tidy-house" name="Evi Topla"
+                                                                                                point="end" solved="true" />
+                                                                                        </container>
+                                                                                    </cascade>
+                                                                                </container>
+                                                                                <!-- ... -->
 
-                                        <container kind="utc-hour" key="13">
-                                            <cascade>
-                                                <container kind="utc-minute" key="0">
-                                                    <container id="eat" name="Yemek" point="start" />
-                                                </container>
-                                                <!-- ... -->
-                                                <container kind="utc-minute" key="30">
-                                                    <container id="eat" name="Yemek" point="end" />
-                                                </container>
-                                            </cascade>
-                                        </container>
-                                        <!-- ... -->
+                                                                                <container kind="utc-hour" key="13">
+                                                                                    <cascade>
+                                                                                        <container kind="utc-minute" key="0">
+                                                                                            <container id="eat" name="Yemek" point="start" />
+                                                                                        </container>
+                                                                                        <!-- ... -->
+                                                                                        <container kind="utc-minute" key="30">
+                                                                                            <container id="eat" name="Yemek" point="end" />
+                                                                                        </container>
+                                                                                    </cascade>
+                                                                                </container>
+                                                                                <!-- ... -->
 
-                                        <!--
-              work-capacity occupants, projected onto time:
-                02:00 .. 10:00   sleep
-                13:00 .. 13:30   eat
+                                                                                <!--
+                                                      work-capacity occupants, projected onto time:
+                                                        02:00 .. 10:00   sleep
+                                                        13:00 .. 13:30   eat
 
-              GAPS the engine can see:
-                10:00 .. 13:00   180 min   <- tidy-house fits, lands here
-                13:30 .. 02:00   long
-              "en kötü nereye, tüm işinin gücünün sonuna"
+                                                      GAPS the engine can see:
+                                                        10:00 .. 13:00   180 min   <- tidy-house fits, lands here
+                                                        13:30 .. 02:00   long
+                                                      "en kötü nereye, tüm işinin gücünün sonuna"
 
-              write-code-ctcp and toilet have no time placement yet. They
-              compete for the same gaps the moment they get one.
-            -->
+                                                      write-code-ctcp and toilet have no time placement yet. They
+                                                      compete for the same gaps the moment they get one.
+                                                    -->
 
                                     </cascade>
                                 </container>
@@ -133,20 +133,20 @@
         </container>
 
         <!--
-      One row, occupying BOTH capacity containers plus time.
-      Sleeping blocks work AND phone. Shitting blocks only work.
-    -->
+          One row, occupying BOTH capacity containers plus time.
+          Sleeping blocks work AND phone. Shitting blocks only work.
+        -->
         <container id="sleep" name="Uyku">
             <at space="work-capacity" start="slot/1" end="slot/1" />
             <at space="phone-capacity" start="slot/1" end="slot/1" />
             <!--
-          PATTERN, not anchored. `*` means ALL, not UNKNOWN.
-          That is the opposite quantifier to Partial<T>, which is why it is
-          its own form and not a half-filled path.
+              PATTERN, not anchored. `*` means ALL, not UNKNOWN.
+              That is the opposite quantifier to Partial<T>, which is why it is
+              its own form and not a half-filled path.
 
-          This is also why CTCP never implements RFC 5545. Recurrence is a
-          wildcard inside a coordinate, not a rule language bolted alongside.
-        -->
+              This is also why CTCP never implements RFC 5545. Recurrence is a
+              wildcard inside a coordinate, not a rule language bolted alongside.
+            -->
             <pattern space="time"
                 start="gregorian-year/*/gregorian-month/*/gregorian-day/*/utc-hour/02/utc-minute/00"
                 end="gregorian-year/*/gregorian-month/*/gregorian-day/*/utc-hour/10/utc-minute/00" />
@@ -169,13 +169,13 @@
         </container>
 
         <!--
-      "evi topla" — bitişi belli değil, açık uçlu.
-      The ADHD fix as data: the engine reads gaps and drops it in.
+          "evi topla" — bitişi belli değil, açık uçlu.
+          The ADHD fix as data: the engine reads gaps and drops it in.
 
-      min-extent counts a PLUGIN unit. Not "PT45M" — an ISO 8601 duration
-      would smuggle a universal time scalar back into a protocol built to
-      reject exactly that.
-    -->
+          min-extent counts a PLUGIN unit. Not "PT45M" — an ISO 8601 duration
+          would smuggle a universal time scalar back into a protocol built to
+          reject exactly that.
+        -->
         <container id="tidy-house" name="Evi Topla">
             <at space="work-capacity" start="slot/5" end="slot/5" />
             <floating space="time" op="first-gap" in="work-capacity" after="now">
@@ -184,9 +184,9 @@
         </container>
 
         <!--
-      Solved against phone-capacity, so a toilet block does not exclude it.
-      "mesajlarını okuma saatini bu sistem sayesinde otomatik saptayabilirsin"
-    -->
+          Solved against phone-capacity, so a toilet block does not exclude it.
+          "mesajlarını okuma saatini bu sistem sayesinde otomatik saptayabilirsin"
+        -->
         <container id="check-messages" name="Mesajlara bak">
             <at space="phone-capacity" start="slot/2" end="slot/2" />
             <floating space="time" op="first-gap" in="phone-capacity" after="now">
@@ -195,10 +195,10 @@
         </container>
 
         <!--
-      RECURRENCE WITH A FORMULA. expr is OPAQUE to the engine — the gregorian
-      plugin parses it. "her 2 yılda bir", "her 0 ile biten yılda bir".
-      The escape hatch that keeps calendar maths out of the core.
-    -->
+          RECURRENCE WITH A FORMULA. expr is OPAQUE to the engine — the gregorian
+          plugin parses it. "her 2 yılda bir", "her 0 ile biten yılda bir".
+          The escape hatch that keeps calendar maths out of the core.
+        -->
         <container id="ulus-genel-kurul" name="Ulus Genel Kurul">
             <pattern space="time"
                 start="gregorian-year/{year % 2 == 0}/gregorian-month/08/gregorian-day/26/utc-hour/14/utc-minute/00"

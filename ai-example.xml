@@ -16,10 +16,10 @@
   <projection space="time">
 
     <!--
-  Root. Renamed from gregorian-time: the upper segments are Gregorian,
-  utc-hour and below are not. Naming the root after one of them overclaims.
-  The handoff mid-path is one plugin's space yielding to another's.
--->
+      Root. Renamed from gregorian-time: the upper segments are Gregorian,
+      utc-hour and below are not. Naming the root after one of them overclaims.
+      The handoff mid-path is one plugin's space yielding to another's.
+    -->
     <container id="time" name="Time">
       <cascade>
         <container kind="gregorian-year" key="1" />
@@ -35,10 +35,10 @@
             <container kind="gregorian-month" key="11" />
 
             <!--
-                  31 days here, 28 under key="2", 29 in a leap year.
-                  The generator reads the ancestor path, not a local index.
-                  This is why capacity cannot be a stored number.
-                -->
+              31 days here, 28 under key="2", 29 in a leap year.
+              The generator reads the ancestor path, not a local index.
+              This is why capacity cannot be a stored number.
+            -->
             <container kind="gregorian-month" key="12">
               <cascade>
                 <container kind="gregorian-day" key="1" />
@@ -46,42 +46,42 @@
                 <container kind="gregorian-day" key="31">
 
                   <!-- stored, no time of its own below day level.
-                                 depth 3 = "sometime that day". -->
-                  <container id="last-day-note" name="Last day of this year" />
+                                   depth 3 = "sometime that day". -->
+                    <container id="last-day-note" name="Last day of this year" />
 
-                  <cascade>
-                    <!-- ... -->
-                    <container kind="utc-hour" key="0">
-                      <cascade>
-                        <container kind="utc-minute" key="0">
-                          <container id="year-start-note"
-                            name="Starting of last day of this year" />
-                        </container>
-                        <!-- ... -->
-                      </cascade>
-                    </container>
-                    <!-- ... -->
+                    <cascade>
+                      <!-- ... -->
+                      <container kind="utc-hour" key="0">
+                        <cascade>
+                          <container kind="utc-minute" key="0">
+                            <container id="year-start-note"
+                              name="Starting of last day of this year" />
+                          </container>
+                          <!-- ... -->
+                        </cascade>
+                      </container>
+                      <!-- ... -->
 
-                    <container kind="utc-hour" key="16">
-                      <cascade>
-                        <!-- ... -->
-                        <container kind="utc-minute" key="30">
+                      <container kind="utc-hour" key="16">
+                        <cascade>
+                          <!-- ... -->
+                          <container kind="utc-minute" key="30">
 
-                          <!-- marker 1 of 2 for entry talk -->
-                          <container id="dinner-entry-talk"
-                            name="Entry Talk" point="start" />
+                            <!-- marker 1 of 2 for entry talk -->
+                            <container id="dinner-entry-talk"
+                              name="Entry Talk" point="start" />
 
-                          <container id="dinner-party"
-                            name="Büyük Ulus Akşam Yemeği" point="start">
-                            <!--
-                                                  SPACE SWITCH. This cascade is the
-                                                  dinner-party space — ordinal slots,
-                                                  no time. Same rendering, different axis.
+                            <container id="dinner-party"
+                              name="Büyük Ulus Akşam Yemeği" point="start">
+                              <!--
+                                                    SPACE SWITCH. This cascade is the
+                                                    dinner-party space — ordinal slots,
+                                                    no time. Same rendering, different axis.
 
-                                                  size 4 does NOT mean it ends 4 minutes
-                                                  later. Ordinal and temporal position are
-                                                  independent, authored separately.
-                                                -->
+                                                    size 4 does NOT mean it ends 4 minutes
+                                                    later. Ordinal and temporal position are
+                                                    independent, authored separately.
+                  -->
                             <cascade space="dinner-party">
                               <container id="dinner-entry-talk"
                                 name="Entry Talk" slot="1" />
@@ -134,15 +134,15 @@
 
 
   <!--
-  ==========================================================
-  STORE — every row above, flat. This is what the DB holds.
+    ==========================================================
+    STORE — every row above, flat. This is what the DB holds.
 
-  Path notation is yours:  kind/key/kind/key/...
-  It is sugar for [{kind, key}, ...]. `key` is opaque to the engine.
+    Path notation is yours:  kind/key/kind/key/...
+    It is sugar for [{kind, key}, ...]. `key` is opaque to the engine.
 
-  Count the rows. The entire year 2026 is zero of them.
-  ==========================================================
--->
+    Count the rows. The entire year 2026 is zero of them.
+    ==========================================================
+  -->
   <store>
 
     <!-- root: no <at> at all. nothing contains it. -->
@@ -153,12 +153,12 @@
         start="gregorian-year/2026/gregorian-month/12/gregorian-day/31/utc-hour/16/utc-minute/30"
         end="gregorian-year/2026/gregorian-month/12/gregorian-day/31/utc-hour/18/utc-minute/10" />
       <!--
-          Reverse index. NON-NORMATIVE: each child's own <at space="dinner-party">
-          already says this. Stored only because deriving it means scanning every
-          row for a placement naming us.
-          Expensive direction: store. Cheap direction (my parents): derive.
-          On conflict the child wins.
-        -->
+        Reverse index. NON-NORMATIVE: each child's own <at space="dinner-party">
+        already says this. Stored only because deriving it means scanning every
+        row for a placement naming us.
+        Expensive direction: store. Cheap direction (my parents): derive.
+        On conflict the child wins.
+      -->
       <children>dinner-entry-talk dinner-entry-meal dinner-main-meal dinner-dessert</children>
     </container>
 

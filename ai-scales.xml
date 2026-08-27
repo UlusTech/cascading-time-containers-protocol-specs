@@ -66,21 +66,21 @@
 
 
     <!--
-  ==========================================================
-  CROSS-SPACE BRIDGING
+      ==========================================================
+      CROSS-SPACE BRIDGING
 
-  NOT a conversion table. NOT a plugin API for "convert ns to UTC".
-  A bridge is a CONTAINER placed in both spaces. It pins them together at
-  one point, and anything sharing an ancestor with it inherits the
-  correspondence through the ordinary inheritance rule (ai-inheritance.xml).
+      NOT a conversion table. NOT a plugin API for "convert ns to UTC".
+      A bridge is a CONTAINER placed in both spaces. It pins them together at
+      one point, and anything sharing an ancestor with it inherits the
+      correspondence through the ordinary inheritance rule (ai-inheritance.xml).
 
-  Bridges are data. A plugin that wants a dense bridge ships containers.
-  No calendar maths in the core. Ever.
+      Bridges are data. A plugin that wants a dense bridge ships containers.
+      No calendar maths in the core. Ever.
 
-  Same mechanism relates gregorian-time to roman-consular-year, to a
-  geological epoch space, to "reign of X". Nothing is privileged.
-  ==========================================================
--->
+      Same mechanism relates gregorian-time to roman-consular-year, to a
+      geological epoch space, to "reign of X". Nothing is privileged.
+      ==========================================================
+    -->
 
     <store>
 
@@ -111,9 +111,9 @@
         </container>
 
         <!--
-      A second bridge, for a wiki rendering history in Roman consular years.
-      The roman plugin never learns Gregorian; it only ships rows like this.
-    -->
+          A second bridge, for a wiki rendering history in Roman consular years.
+          The roman plugin never learns Gregorian; it only ships rows like this.
+        -->
         <container id="consulship-of-cicero" name="Consulship of Cicero and Antonius">
             <at space="roman-consular-year" start="consular-year/691" end="consular-year/691" />
             <at space="time" start="gregorian-year/-62" end="gregorian-year/-62" />

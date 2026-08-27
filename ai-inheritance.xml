@@ -90,40 +90,40 @@
 
 
     <!--
-  ==========================================================
-  RESOLUTION — worked, step by step
-  ==========================================================
+      ==========================================================
+      RESOLUTION — worked, step by step
+      ==========================================================
 
-  resolve(buy-milk, time)
+      resolve(buy-milk, time)
 
-    buy-milk is placed in 3 spaces. Walk up each:
+        buy-milk is placed in 3 spaces. Walk up each:
 
-      via shopping-list            -> root. no time placement.   DROPS OUT.
-      via shopping-trip-2026-09-20 -> 09/20 19:48 .. 20:30       constraint
-      via grocery-budget-2026-09   -> all of September           constraint
+          via shopping-list            -> root. no time placement.   DROPS OUT.
+          via shopping-trip-2026-09-20 -> 09/20 19:48 .. 20:30       constraint
+          via grocery-budget-2026-09   -> all of September           constraint
 
-    intersect the two that landed:
+        intersect the two that landed:
 
-      { tag: "in",
-        intervals: [ 2026/09/20 19:48 .. 20:30 ],
-        via: [ shopping-trip-2026-09-20, grocery-budget-2026-09 ] }
+          { tag: "in",
+            intervals: [ 2026/09/20 19:48 .. 20:30 ],
+            via: [ shopping-trip-2026-09-20, grocery-budget-2026-09 ] }
 
-    Coarse ancestor + fine ancestor intersect cleanly. The coarse one did not
-    make the answer worse; it just did not narrow it further.
+        Coarse ancestor + fine ancestor intersect cleanly. The coarse one did not
+        make the answer worse; it just did not narrow it further.
 
-  IF THE CHAINS HAD NOT OVERLAPPED
+      IF THE CHAINS HAD NOT OVERLAPPED
 
-      { tag: "conflict", chains: [...] }
+          { tag: "conflict", chains: [...] }
 
-    Never silently pick a winner. For an org's logs this is exactly your
-    misplaced-entry detector, not merely bad data.
+        Never silently pick a winner. For an org's logs this is exactly your
+        misplaced-entry detector, not merely bad data.
 
-  IF NOTHING LANDED
+      IF NOTHING LANDED
 
-      { tag: "unbounded" }
+          { tag: "unbounded" }
 
-    Genuinely unpositioned in that space. Correct answer, not an error.
--->
+        Genuinely unpositioned in that space. Correct answer, not an error.
+    -->
 
     <store>
 
@@ -155,10 +155,10 @@
         </container>
 
         <!--
-      "önümüzdeki ilk alışveriş eyleminin içinde olun"
-      The predicate is stored, not the answer. It resolves the moment a
-      matching container appears — maybe when you walk into the shop.
-    -->
+          "önümüzdeki ilk alışveriş eyleminin içinde olun"
+          The predicate is stored, not the answer. It resolves the moment a
+          matching container appears — maybe when you walk into the shop.
+        -->
         <container id="buy-zart" name="Zart Al">
             <at space="shopping-list" start="slot/2" end="slot/2" />
             <floating space="time" op="inside-first-matching" kind="shopping-trip" after="now" />
