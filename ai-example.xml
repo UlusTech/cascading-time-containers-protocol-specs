@@ -1,0 +1,715 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  CTCP — Cascading Time Containers Protocol
+  ai-example.xml — design snapshot. Not a schema, not normative.
+
+  Two views of the same data:
+    <store>       what the DB holds. Flat rows. This is the truth.
+    <projection>  what an engine renders. Nested. Derived, never stored.
+                  (whos-talk.md's XML was this view — hence "bayaaa bi karışık")
+
+  AXIOM: everything is a container.
+  A cascade is the interior of a container. It has no id of its own; it is
+  named by the container that owns it. Therefore SpaceID = ContainerID.
+
+  Engine knows:   identity, containment, ordering, conflict.
+  Engine ignores: what a year is, how many days August has, what 16:30 means.
+                  `key` is an opaque string. Plugin territory.
+-->
+<ctcp version="0.1-draft">
+
+  <!-- ==========================================================
+       PLUGINS
+       ==========================================================
+       A plugin owns a set of kinds and must export exactly two
+       functions to the engine:
+
+         compare(space, pathA, pathB) -> -1 | 0 | 1
+         normalize(space, path)       -> path    // carry: 0:70 -> 1:10
+
+       That is the whole protocol surface. Labels, leap years,
+       "every 2 years", locale, formatting — all stay behind the wall.
+       Both sync, so WASM works.
+
+       Generated interiors are NEVER stored. `gregorian-year` is ONE row
+       that produces 2026 on demand. There is no <container id="2026">.
+  -->
+  <plugins>
+    <plugin id="gregorian" runtime="wasm">
+      <kind id="gregorian-century" />
+      <kind id="gregorian-year" />
+      <kind id="gregorian-month"
+        note="interior size depends on the ancestor year, not on local index — the generator reads the path, not an index" />
+      <kind id="gregorian-day" />
+      <exports compare="yes" normalize="yes" />
+    </plugin>
+
+    <plugin id="utc-clock" runtime="wasm">
+      <kind id="utc-hour" radix="24" />
+      <kind id="utc-minute" radix="60" />
+      <kind id="utc-second" radix="60" />
+      <kind id="utc-ms" radix="1000" />
+      <exports compare="yes" normalize="yes" />
+    </plugin>
+
+    <plugin id="monotonic" runtime="wasm">
+      <kind id="mono-ns" note="flat unbounded counter, no subdivision" />
+      <exports compare="yes" normalize="yes" />
+    </plugin>
+
+    <plugin id="ordinal" runtime="wasm"
+      note="the trivial plugin. slot 1, 2, 3... what authored containers use">
+      <kind id="slot" />
+      <exports compare="yes" normalize="yes" />
+    </plugin>
+  </plugins>
+
+
+  <!-- ==========================================================
+       STORE — flat. every row is a container.
+       ========================================================== -->
+  <store>
+
+    <!--
+      ROOT. No <placements> element at all.
+      Root test is derived, never declared:
+        root  = 0 placements AND >=1 container placed in it
+        draft = 0 placements AND nothing placed in it
+      A stored isRoot="true" would go stale the moment someone places it.
+
+      Named generically on purpose: the upper segments are Gregorian, the
+      lower ones are UTC. Calling this root "gregorian-time" overclaims.
+      The handoff mid-path is one plugin's space yielding to another's —
+      which is exactly what opaque `key` was designed to allow.
+    -->
+    <container id="time" name="Time" />
+
+
+    <!-- ======================= DINNER =======================
+         The worked example. Note what it proves:
+         ordinal position and time position are INDEPENDENT.
+         Dinner has 4 slots. That does NOT mean it ends 4 minutes later.
+         Each child's time position is authored separately.
+    -->
+    <container id="dinner-party" name="Büyük Ulus Akşam Yemeği">
+      <placements>
+        <placement space="time">
+          <anchored>
+            <start>
+              <seg kind="gregorian-year" key="2026" />
+              <seg kind="gregorian-month" key="12" />
+              <seg kind="gregorian-day" key="31" />
+              <seg kind="utc-hour" key="16" />
+              <seg kind="utc-minute" key="30" />
+            </start>
+            <end>
+              <seg kind="gregorian-year" key="2026" />
+              <seg kind="gregorian-month" key="12" />
+              <seg kind="gregorian-day" key="31" />
+              <seg kind="utc-hour" key="18" />
+              <seg kind="utc-minute" key="10" />
+            </end>
+          </anchored>
+        </placement>
+      </placements>
+
+      <!--
+        Reverse index. NON-NORMATIVE — each child's own <placement space="dinner-party">
+        already says this. Stored because deriving it means scanning every
+        container in the DB for a placement naming us. Expensive direction: store.
+        Cheap direction (my parents): derived, never stored.
+        On conflict, the child's placement wins.
+      -->
+      <children>
+        <child id="dinner-entry-talk" />
+        <child id="dinner-entry-meal" />
+        <child id="dinner-main-meal" />
+        <child id="dinner-dessert" />
+      </children>
+    </container>
+
+    <!--
+      THE KEY ROW. One container, two spaces, two independent positions.
+      This is "bir container birden fazla cascade'de olabilir" as data.
+
+      In the projection this appears THREE times: once in dinner slot 1,
+      once at 16:30 marked point="start", once at 16:40 marked point="end".
+      A tree cannot express an interval, only points. The row can.
+    -->
+    <container id="dinner-entry-talk" name="Entry Talk">
+      <placements>
+        <placement space="dinner-party">
+          <anchored>
+            <start>
+              <seg kind="slot" key="1" />
+            </start>
+            <end>
+              <seg kind="slot" key="1" />
+            </end>
+          </anchored>
+        </placement>
+
+        <placement space="time">
+          <anchored>
+            <start>
+              <seg kind="gregorian-year" key="2026" />
+              <seg kind="gregorian-month" key="12" />
+              <seg kind="gregorian-day" key="31" />
+              <seg kind="utc-hour" key="16" />
+              <seg kind="utc-minute" key="30" />
+            </start>
+            <end>
+              <seg kind="gregorian-year" key="2026" />
+              <seg kind="gregorian-month" key="12" />
+              <seg kind="gregorian-day" key="31" />
+              <seg kind="utc-hour" key="16" />
+              <seg kind="utc-minute" key="40" />
+            </end>
+          </anchored>
+        </placement>
+      </placements>
+    </container>
+
+    <!--
+      Ordinally fixed, temporally silent. No <placement space="time">.
+      Resolving it in `time` walks up the dinner-party chain and inherits
+      16:30 to 18:10. Coarse, honest, correct.
+
+      ABSENCE is the encoding. There is no {tag:"inherited"} variant —
+      that would be a second encoding of the same fact, and on a wire
+      protocol two encodings of one meaning is a bug generator.
+    -->
+    <container id="dinner-entry-meal" name="Entry Meal">
+      <placements>
+        <placement space="dinner-party">
+          <anchored>
+            <start>
+              <seg kind="slot" key="2" />
+            </start>
+            <end>
+              <seg kind="slot" key="2" />
+            </end>
+          </anchored>
+        </placement>
+      </placements>
+    </container>
+
+    <container id="dinner-main-meal" name="Meal">
+      <placements>
+        <placement space="dinner-party">
+          <anchored>
+            <start>
+              <seg kind="slot" key="3" />
+            </start>
+            <end>
+              <seg kind="slot" key="3" />
+            </end>
+          </anchored>
+        </placement>
+      </placements>
+    </container>
+
+    <container id="dinner-dessert" name="Dessert">
+      <placements>
+        <placement space="dinner-party">
+          <anchored>
+            <start>
+              <seg kind="slot" key="4" />
+            </start>
+            <end>
+              <seg kind="slot" key="4" />
+            </end>
+          </anchored>
+        </placement>
+      </placements>
+    </container>
+
+
+    <!-- ================ MULTI-PARENT INHERITANCE ================
+         "süt almıştım" — ne zaman aldım?
+
+         RULE: for each space C is placed in, walk up until an ancestor
+         has a placement in the space you asked for.
+           chain reaches one  -> contributes a constraint
+           chain hits a root  -> contributes NOTHING (drops out, does not widen)
+         Then intersect the constraints that landed. They are comparable
+         because they are all positions in the same space.
+
+         10 parents is not ambiguity. It is 10 chances to narrow.
+    -->
+    <container id="shopping-list" name="Alışveriş Listesi">
+      <!-- no placements. root (things are placed in it), not draft. -->
+      <children>
+        <child id="buy-milk" />
+        <child id="buy-zart" />
+      </children>
+    </container>
+
+    <container id="shopping-trip-2026-09-20" name="Alışverişe Çıkma">
+      <placements>
+        <placement space="time">
+          <anchored>
+            <start>
+              <seg kind="gregorian-year" key="2026" />
+              <seg kind="gregorian-month" key="09" />
+              <seg kind="gregorian-day" key="20" />
+              <seg kind="utc-hour" key="19" />
+              <seg kind="utc-minute" key="48" />
+            </start>
+            <end>
+              <seg kind="gregorian-year" key="2026" />
+              <seg kind="gregorian-month" key="09" />
+              <seg kind="gregorian-day" key="20" />
+              <seg kind="utc-hour" key="20" />
+              <seg kind="utc-minute" key="30" />
+            </end>
+          </anchored>
+        </placement>
+      </placements>
+      <children>
+        <child id="buy-milk" />
+      </children>
+    </container>
+
+    <container id="grocery-budget-2026-09" name="Eylül Market Bütçesi">
+      <placements>
+        <!--
+          COARSE anchor. Depth = width. Stopping at gregorian-month means
+          "sometime in September" — the whole subtree below month 09.
+          No precision field needed; depth already carries it.
+        -->
+        <placement space="time">
+          <anchored>
+            <start>
+              <seg kind="gregorian-year" key="2026" />
+              <seg kind="gregorian-month" key="09" />
+            </start>
+            <end>
+              <seg kind="gregorian-year" key="2026" />
+              <seg kind="gregorian-month" key="09" />
+            </end>
+          </anchored>
+        </placement>
+      </placements>
+      <children>
+        <child id="buy-milk" />
+      </children>
+    </container>
+
+    <!--
+      THREE parents, no time placement of its own.
+        via shopping-list             -> root, no time placement -> drops out
+        via shopping-trip-2026-09-20  -> 19:48 to 20:30
+        via grocery-budget-2026-09    -> all of September
+      intersect -> 19:48 to 20:30
+
+      resolve(buy-milk, time) =
+        { tag: "in",
+          intervals: [ 2026/09/20 19:48 .. 20:30 ],
+          via: [shopping-trip-2026-09-20, grocery-budget-2026-09] }
+
+      Coarse ancestor + fine ancestor intersect cleanly. If two chains had
+      landed with no overlap: { tag: "conflict", chains: [...] } — which for
+      org logs is your misplaced-entry detector, not merely bad data.
+      Never silently pick a winner.
+    -->
+    <container id="buy-milk" name="Süt Al">
+      <placements>
+        <placement space="shopping-list">
+          <anchored>
+            <start>
+              <seg kind="slot" key="1" />
+            </start>
+            <end>
+              <seg kind="slot" key="1" />
+            </end>
+          </anchored>
+        </placement>
+        <placement space="shopping-trip-2026-09-20">
+          <anchored>
+            <start>
+              <seg kind="slot" key="3" />
+            </start>
+            <end>
+              <seg kind="slot" key="3" />
+            </end>
+          </anchored>
+        </placement>
+        <placement space="grocery-budget-2026-09">
+          <anchored>
+            <start>
+              <seg kind="slot" key="7" />
+            </start>
+            <end>
+              <seg kind="slot" key="7" />
+            </end>
+          </anchored>
+        </placement>
+      </placements>
+    </container>
+
+    <!--
+      "önümüzdeki ilk alışveriş eyleminin içinde olun"
+      FLOATING. The engine solves the position; the predicate is stored,
+      not the answer. Resolves the moment a matching container appears.
+    -->
+    <container id="buy-zart" name="Zart Al">
+      <placements>
+        <placement space="shopping-list">
+          <anchored>
+            <start>
+              <seg kind="slot" key="2" />
+            </start>
+            <end>
+              <seg kind="slot" key="2" />
+            </end>
+          </anchored>
+        </placement>
+        <placement space="time">
+          <floating>
+            <solve op="inside-first-matching" kind="shopping-trip" after="now" />
+          </floating>
+        </placement>
+      </placements>
+    </container>
+
+
+    <!-- ============ EXCLUSION IS JUST CONTAINMENT ============
+         No conflict edges. No resource declarations. No new concept.
+         "Aynı anda yapamayacağın işlerin listesi" is a container, and its
+         interior is the list. Conflict = two occupants of one container's
+         cascade wanting overlapping time positions.
+
+         Toilet blocks coding but not phone use, because they are contents
+         of different containers. That is the whole mechanism.
+    -->
+    <container id="work-capacity" name="Bir şey üstünde çalışmaya uygunluğu">
+      <children>
+        <child id="sleep" />
+        <child id="eat" />
+        <child id="toilet" />
+        <child id="write-code-ctcp" />
+        <child id="tidy-house" />
+      </children>
+    </container>
+
+    <container id="phone-capacity" name="Telefon kullanma">
+      <!-- toilet is NOT here. fiziksel olarak imkanlı. -->
+      <children>
+        <child id="sleep" />
+        <child id="check-messages" />
+      </children>
+    </container>
+
+    <!-- sleep occupies BOTH capacity containers. one row, two placements. -->
+    <container id="sleep" name="Uyku">
+      <placements>
+        <placement space="work-capacity">
+          <anchored>
+            <start>
+              <seg kind="slot" key="1" />
+            </start>
+            <end>
+              <seg kind="slot" key="1" />
+            </end>
+          </anchored>
+        </placement>
+        <placement space="phone-capacity">
+          <anchored>
+            <start>
+              <seg kind="slot" key="1" />
+            </start>
+            <end>
+              <seg kind="slot" key="1" />
+            </end>
+          </anchored>
+        </placement>
+        <!--
+          PATTERN. year/month/day all `any` -> every day, 02:00 to 10:00.
+          Omitting a segment key means ALL, not UNKNOWN. Opposite quantifier
+          to Partial<T>, which is why this is its own tag and not a
+          half-filled anchored path.
+
+          This is also why CTCP never implements RFC 5545. Recurrence is a
+          wildcard in a coordinate, not a rule language bolted on the side.
+        -->
+        <placement space="time">
+          <pattern>
+            <start>
+              <seg kind="gregorian-year" match="any" />
+              <seg kind="gregorian-month" match="any" />
+              <seg kind="gregorian-day" match="any" />
+              <seg kind="utc-hour" match="exact" key="02" />
+              <seg kind="utc-minute" match="exact" key="00" />
+            </start>
+            <end>
+              <seg kind="gregorian-year" match="any" />
+              <seg kind="gregorian-month" match="any" />
+              <seg kind="gregorian-day" match="any" />
+              <seg kind="utc-hour" match="exact" key="10" />
+              <seg kind="utc-minute" match="exact" key="00" />
+            </end>
+          </pattern>
+        </placement>
+      </placements>
+    </container>
+
+    <!--
+      "evi topla" — bitişi belli değil, açık uçlu.
+      ADHD ultimate fix, as data: engine reads the gaps in work-capacity's
+      time projection and drops this into the first one that fits.
+
+      min-extent is counted in a plugin-defined unit, NOT an ISO 8601
+      duration. "PT45M" would smuggle a universal time scalar back into a
+      protocol built to reject one.
+    -->
+    <container id="tidy-house" name="Evi Topla">
+      <placements>
+        <placement space="work-capacity">
+          <anchored>
+            <start>
+              <seg kind="slot" key="5" />
+            </start>
+            <end>
+              <seg kind="slot" key="5" />
+            </end>
+          </anchored>
+        </placement>
+        <placement space="time">
+          <floating>
+            <solve op="first-gap" in="work-capacity" after="now">
+              <min-extent kind="utc-minute" count="45" />
+            </solve>
+          </floating>
+        </placement>
+      </placements>
+    </container>
+
+    <!--
+      match="expr" — plugin-evaluated. String is OPAQUE to the engine;
+      the gregorian plugin parses it. "her 2 yılda bir", "her 0 ile biten yıl".
+      This is the escape hatch that keeps formulas out of the core.
+    -->
+    <container id="ulus-genel-kurul" name="Ulus Genel Kurul">
+      <placements>
+        <placement space="time">
+          <pattern>
+            <start>
+              <seg kind="gregorian-year" match="expr" expr="year % 2 == 0" />
+              <seg kind="gregorian-month" match="exact" key="08" />
+              <seg kind="gregorian-day" match="exact" key="26" />
+              <seg kind="utc-hour" match="exact" key="14" />
+              <seg kind="utc-minute" match="exact" key="00" />
+            </start>
+            <end>
+              <seg kind="gregorian-year" match="expr" expr="year % 2 == 0" />
+              <seg kind="gregorian-month" match="exact" key="08" />
+              <seg kind="gregorian-day" match="exact" key="26" />
+              <seg kind="utc-hour" match="exact" key="18" />
+              <seg kind="utc-minute" match="exact" key="00" />
+            </end>
+          </pattern>
+        </placement>
+      </placements>
+    </container>
+
+
+    <!-- ================== LOGS, ns RESOLUTION ==================
+         Not a calendar protocol. A time protocol.
+         No field named `time`, `timestamp`, `clock` or `defaultSpace`
+         exists anywhere in the core. Every question is space-qualified
+         at the call site: resolve(container, space).
+         A calendar UI asks for `time`. A log viewer asks for `mono-boot-42`.
+         Neither is the protocol's business.
+    -->
+    <container id="mono-boot-42" name="Monotonic clock, boot 42" />
+
+    <container id="log-req-8f21a" name="POST /api/containers">
+      <placements>
+        <placement space="mono-boot-42">
+          <anchored>
+            <start>
+              <seg kind="mono-ns" key="9182773310041" />
+            </start>
+            <end>
+              <seg kind="mono-ns" key="9182773318894" />
+            </end>
+          </anchored>
+        </placement>
+      </placements>
+    </container>
+
+    <!--
+      CROSS-SPACE BRIDGE. Not a conversion table — a container placed in
+      BOTH spaces. It pins them together at one point, and anything sharing
+      an ancestor with it inherits the correspondence.
+
+      Same mechanism bridges gregorian to roman-consular-year for a
+      Wikipedia-style history view. A plugin wanting a dense bridge ships
+      containers. No calendar conversion logic in the core. Ever.
+    -->
+    <container id="boot-42-epoch" name="Boot 42 epoch">
+      <placements>
+        <placement space="mono-boot-42">
+          <anchored>
+            <start>
+              <seg kind="mono-ns" key="0" />
+            </start>
+            <end>
+              <seg kind="mono-ns" key="0" />
+            </end>
+          </anchored>
+        </placement>
+        <placement space="time">
+          <anchored>
+            <start>
+              <seg kind="gregorian-year" key="2026" />
+              <seg kind="gregorian-month" key="08" />
+              <seg kind="gregorian-day" key="26" />
+              <seg kind="utc-hour" key="14" />
+              <seg kind="utc-minute" key="00" />
+              <seg kind="utc-second" key="00" />
+              <seg kind="utc-ms" key="000" />
+            </start>
+            <end>
+              <seg kind="gregorian-year" key="2026" />
+              <seg kind="gregorian-month" key="08" />
+              <seg kind="gregorian-day" key="26" />
+              <seg kind="utc-hour" key="14" />
+              <seg kind="utc-minute" key="00" />
+              <seg kind="utc-second" key="00" />
+              <seg kind="utc-ms" key="000" />
+            </end>
+          </anchored>
+        </placement>
+      </placements>
+    </container>
+
+
+    <!-- ================== HISTORY, COARSE ==================
+         Depth = width. Same protocol, same rows, 10^17 times coarser
+         than the log above. Stopping at gregorian-year says
+         "sometime in 1347" without any precision or granularity field.
+    -->
+    <container id="black-death" name="Kara Ölüm">
+      <placements>
+        <placement space="time">
+          <anchored>
+            <start>
+              <seg kind="gregorian-year" key="1347" />
+            </start>
+            <end>
+              <seg kind="gregorian-year" key="1351" />
+            </end>
+          </anchored>
+        </placement>
+      </placements>
+    </container>
+
+    <container id="hundred-years-war" name="Yüzyıl Savaşları">
+      <placements>
+        <placement space="time">
+          <anchored>
+            <start>
+              <seg kind="gregorian-century" key="14" />
+            </start>
+            <end>
+              <seg kind="gregorian-century" key="15" />
+            </end>
+          </anchored>
+        </placement>
+      </placements>
+      <children>
+        <child id="black-death" />
+      </children>
+    </container>
+
+
+    <!-- DRAFT. 0 placements AND nothing placed in it. The inbox, for free. -->
+    <container id="idea-nmc-federation" name="NMC federasyon notu" />
+
+  </store>
+
+
+  <!-- ==========================================================
+       PROJECTION — generated, never stored.
+       This is whos-talk.md's XML. Every node below is computed:
+       the grid nodes from plugin generators, the point="start|end"
+       markers from splitting one anchored placement across two slots.
+       ========================================================== -->
+  <projection space="time" window="2026-12-31T16:00Z/2026-12-31T18:30Z">
+    <container id="time" name="Time">
+      <cascade>
+        <!-- generated by gregorian, not stored -->
+        <container kind="gregorian-year" key="2026">
+          <cascade>
+            <container kind="gregorian-month" key="12">
+              <cascade>
+                <container kind="gregorian-day" key="31">
+                  <cascade>
+                    <container kind="utc-hour" key="16">
+                      <cascade>
+                        <container kind="utc-minute" key="30">
+                          <!-- one row -> two markers, because a tree
+                               cannot hold an interval -->
+                          <container id="dinner-entry-talk"
+                            name="Entry Talk" point="start" />
+                          <container id="dinner-party"
+                            name="Büyük Ulus Akşam Yemeği" point="start">
+                            <!-- switching spaces mid-render: this cascade is
+                                 the dinner-party space, ordinal, not time -->
+                            <cascade space="dinner-party">
+                              <container id="dinner-entry-talk" name="Entry Talk" slot="1" />
+                              <container id="dinner-entry-meal" name="Entry Meal" slot="2"
+                                inherited-from="dinner-party" />
+                              <container id="dinner-main-meal" name="Meal" slot="3"
+                                inherited-from="dinner-party" />
+                              <container id="dinner-dessert" name="Dessert" slot="4"
+                                inherited-from="dinner-party" />
+                            </cascade>
+                          </container>
+                        </container>
+                        <container kind="utc-minute" key="40">
+                          <container id="dinner-entry-talk"
+                            name="Entry Talk" point="end" />
+                        </container>
+                      </cascade>
+                    </container>
+                    <container kind="utc-hour" key="18">
+                      <cascade>
+                        <container kind="utc-minute" key="10">
+                          <container id="dinner-party"
+                            name="Büyük Ulus Akşam Yemeği" point="end" />
+                        </container>
+                      </cascade>
+                    </container>
+                  </cascade>
+                </container>
+              </cascade>
+            </container>
+          </cascade>
+        </container>
+      </cascade>
+    </container>
+  </projection>
+
+
+  <!--
+    ==========================================================
+    STILL OPEN
+    ==========================================================
+    1. Carry off the top. normalize() overflows the highest segment —
+       does the space grow a level upward, cap, or error?
+    2. Range extents. "40 veya 45te biter" — an interval-valued end,
+       distinct from coarse depth. Not encodable above.
+    3. floating <solve> grammar. Engine-interpreted or plugin-interpreted?
+       If engine, it is protocol surface and needs pinning down.
+       If plugin, the engine cannot auto-place without loading a plugin.
+       <min-extent> above assumes a plugin-defined unit, never ISO 8601.
+    4. Cycle detection. A places in B, B places in A. No type forbids it;
+       the resolver must return a tagged failure.
+    5. Does a container ever own two cascades? whos-talk.md line 126 says no
+       (one interior, or none). The <children> + separate grid in the
+       original example.xml hinted yes. Assumed NO above.
+  -->
+</ctcp>
