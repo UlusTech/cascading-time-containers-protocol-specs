@@ -1,0 +1,127 @@
+<!--
+  CTCP · ai-scales.xml — a TIME protocol, not a calendar protocol
+
+  Same rows, same rules, from nanoseconds to centuries.
+
+  DEPTH IS PRECISION. There is no precision field, no granularity field, no
+  unit field. A path that stops at gregorian-year says "sometime in 1347".
+  A path that runs to mono-ns says one nanosecond. Same mechanism.
+
+  Every path is an interval. Depth decides its width. `start`/`end` add an
+  explicit span on top. Both exist; neither replaces the other.
+
+  NO field named time, timestamp, clock, or defaultSpace appears anywhere in
+  the core. Every question is space-qualified at the call site:
+    a calendar UI asks for `time`
+    a log viewer asks for `mono-boot-42`
+    a history wiki asks for `roman-consular-year`
+  None of them is the protocol's business.
+-->
+<ctcp-example name="scales">
+
+    <!-- ========== ns. an org's logs. ========== -->
+    <projection space="mono-boot-42">
+        <container id="mono-boot-42" name="Monotonic clock, boot 42">
+            <cascade>
+                <!-- flat unbounded counter. no subdivision, one segment deep. -->
+                <!-- ... -->
+                <container kind="mono-ns" key="9182773310041">
+                    <container id="log-req-8f21a" name="POST /api/containers" point="start" />
+                </container>
+                <!-- ... -->
+                <container kind="mono-ns" key="9182773318894">
+                    <container id="log-req-8f21a" name="POST /api/containers" point="end" />
+                </container>
+                <!-- ... -->
+            </cascade>
+        </container>
+    </projection>
+
+    <!-- ========== centuries. same protocol. ========== -->
+    <projection space="time">
+        <container id="time" name="Time">
+            <cascade>
+                <!-- ... -->
+                <container kind="gregorian-century" key="14">
+                    <container id="hundred-years-war" name="Yüzyıl Savaşları" point="start" />
+                    <cascade>
+                        <!-- ... -->
+                        <container kind="gregorian-year" key="1347">
+                            <container id="black-death" name="Kara Ölüm" point="start" />
+                        </container>
+                        <!-- ... -->
+                        <container kind="gregorian-year" key="1351">
+                            <container id="black-death" name="Kara Ölüm" point="end" />
+                        </container>
+                        <!-- ... -->
+                    </cascade>
+                </container>
+                <container kind="gregorian-century" key="15">
+                    <container id="hundred-years-war" name="Yüzyıl Savaşları" point="end" />
+                </container>
+                <!-- ... -->
+            </cascade>
+        </container>
+    </projection>
+
+
+    <!--
+  ==========================================================
+  CROSS-SPACE BRIDGING
+
+  NOT a conversion table. NOT a plugin API for "convert ns to UTC".
+  A bridge is a CONTAINER placed in both spaces. It pins them together at
+  one point, and anything sharing an ancestor with it inherits the
+  correspondence through the ordinary inheritance rule (ai-inheritance.xml).
+
+  Bridges are data. A plugin that wants a dense bridge ships containers.
+  No calendar maths in the core. Ever.
+
+  Same mechanism relates gregorian-time to roman-consular-year, to a
+  geological epoch space, to "reign of X". Nothing is privileged.
+  ==========================================================
+-->
+
+    <store>
+
+        <container id="mono-boot-42" name="Monotonic clock, boot 42" />
+
+        <container id="log-req-8f21a" name="POST /api/containers">
+            <at space="mono-boot-42"
+                start="mono-ns/9182773310041"
+                end="mono-ns/9182773318894" />
+        </container>
+
+        <!-- THE BRIDGE. two spaces, one point, pinned. -->
+        <container id="boot-42-epoch" name="Boot 42 epoch">
+            <at space="mono-boot-42" start="mono-ns/0" end="mono-ns/0" />
+            <at space="time"
+                start="gregorian-year/2026/gregorian-month/08/gregorian-day/26/utc-hour/14/utc-minute/00/utc-second/00/utc-ms/000"
+                end="gregorian-year/2026/gregorian-month/08/gregorian-day/26/utc-hour/14/utc-minute/00/utc-second/00/utc-ms/000" />
+        </container>
+
+        <!-- depth 1. five years wide, and that width is not stored anywhere. -->
+        <container id="black-death" name="Kara Ölüm">
+            <at space="time" start="gregorian-year/1347" end="gregorian-year/1351" />
+        </container>
+
+        <container id="hundred-years-war" name="Yüzyıl Savaşları">
+            <at space="time" start="gregorian-century/14" end="gregorian-century/15" />
+            <children>black-death</children>
+        </container>
+
+        <!--
+      A second bridge, for a wiki rendering history in Roman consular years.
+      The roman plugin never learns Gregorian; it only ships rows like this.
+    -->
+        <container id="consulship-of-cicero" name="Consulship of Cicero and Antonius">
+            <at space="roman-consular-year" start="consular-year/691" end="consular-year/691" />
+            <at space="time" start="gregorian-year/-62" end="gregorian-year/-62" />
+        </container>
+
+        <!-- DRAFT. 0 placements AND nothing placed in it. Your inbox, for free. -->
+        <container id="idea-nmc-federation" name="NMC federasyon notu" />
+
+    </store>
+
+</ctcp-example>

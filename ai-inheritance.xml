@@ -1,0 +1,169 @@
+<!--
+  CTCP · ai-inheritance.xml — "süt almıştım, ne zaman aldım?"
+
+  THE PROBLEM YOU RAISED
+    A container can sit inside 10 different things. If it has no time
+    position of its own, which parent do we look at?
+
+  THE ANSWER
+    All of them. For each space the container is placed in, walk up until
+    an ancestor has a placement in the space you ASKED FOR.
+      chain reaches one  -> contributes a constraint
+      chain hits a root  -> contributes NOTHING. drops out, does not widen.
+    Then intersect what landed. They are comparable because they are all
+    positions in the same space.
+
+    10 parents is not ambiguity. It is 10 chances to narrow.
+
+  No default space. The question is always resolve(container, space).
+-->
+<ctcp-example name="inheritance">
+
+    <!-- ========== the same milk, seen from three spaces ========== -->
+
+    <projection space="shopping-list">
+        <container id="shopping-list" name="Alışveriş Listesi">
+            <!-- no time anywhere in this chain. planning, not scheduling. -->
+            <cascade>
+                <container id="buy-milk" name="Süt Al" slot="1" time="unknown-here" />
+                <container id="buy-zart" name="Zart Al" slot="2" time="floating" />
+            </cascade>
+        </container>
+    </projection>
+
+    <projection space="time">
+        <container id="time" name="Time">
+            <cascade>
+                <!-- ... -->
+                <container kind="gregorian-year" key="2026">
+                    <cascade>
+                        <!-- ... -->
+                        <container kind="gregorian-month" key="9">
+
+                            <!-- coarse anchor lives at THIS depth: all of September -->
+                            <container id="grocery-budget-2026-09" name="Eylül Market Bütçesi">
+                                <cascade space="grocery-budget-2026-09">
+                                    <!-- ... -->
+                                    <container id="buy-milk" name="Süt Al" slot="7" />
+                                </cascade>
+                            </container>
+
+                            <cascade>
+                                <!-- ... -->
+                                <container kind="gregorian-day" key="20">
+                                    <cascade>
+                                        <!-- ... -->
+                                        <container kind="utc-hour" key="19">
+                                            <cascade>
+                                                <!-- ... -->
+                                                <container kind="utc-minute" key="48">
+                                                    <container id="shopping-trip-2026-09-20"
+                                                        name="Alışverişe Çıkma" point="start">
+                                                        <cascade space="shopping-trip-2026-09-20">
+                                                            <!-- ... -->
+                                                            <container id="buy-milk" name="Süt Al"
+                                                                slot="3" />
+                                                        </cascade>
+                                                    </container>
+                                                </container>
+                                                <!-- ... -->
+                                            </cascade>
+                                        </container>
+                                        <container kind="utc-hour" key="20">
+                                            <cascade>
+                                                <!-- ... -->
+                                                <container kind="utc-minute" key="30">
+                                                    <container id="shopping-trip-2026-09-20"
+                                                        name="Alışverişe Çıkma" point="end" />
+                                                </container>
+                                            </cascade>
+                                        </container>
+                                    </cascade>
+                                </container>
+                            </cascade>
+                        </container>
+                    </cascade>
+                </container>
+            </cascade>
+        </container>
+    </projection>
+
+
+    <!--
+  ==========================================================
+  RESOLUTION — worked, step by step
+  ==========================================================
+
+  resolve(buy-milk, time)
+
+    buy-milk is placed in 3 spaces. Walk up each:
+
+      via shopping-list            -> root. no time placement.   DROPS OUT.
+      via shopping-trip-2026-09-20 -> 09/20 19:48 .. 20:30       constraint
+      via grocery-budget-2026-09   -> all of September           constraint
+
+    intersect the two that landed:
+
+      { tag: "in",
+        intervals: [ 2026/09/20 19:48 .. 20:30 ],
+        via: [ shopping-trip-2026-09-20, grocery-budget-2026-09 ] }
+
+    Coarse ancestor + fine ancestor intersect cleanly. The coarse one did not
+    make the answer worse; it just did not narrow it further.
+
+  IF THE CHAINS HAD NOT OVERLAPPED
+
+      { tag: "conflict", chains: [...] }
+
+    Never silently pick a winner. For an org's logs this is exactly your
+    misplaced-entry detector, not merely bad data.
+
+  IF NOTHING LANDED
+
+      { tag: "unbounded" }
+
+    Genuinely unpositioned in that space. Correct answer, not an error.
+-->
+
+    <store>
+
+        <!-- root: things are placed IN it, it is placed nowhere. -->
+        <container id="shopping-list" name="Alışveriş Listesi">
+            <children>buy-milk buy-zart</children>
+        </container>
+
+        <container id="shopping-trip-2026-09-20" name="Alışverişe Çıkma">
+            <at space="time"
+                start="gregorian-year/2026/gregorian-month/09/gregorian-day/20/utc-hour/19/utc-minute/48"
+                end="gregorian-year/2026/gregorian-month/09/gregorian-day/20/utc-hour/20/utc-minute/30" />
+            <children>buy-milk</children>
+        </container>
+
+        <!-- depth 2. "sometime in September." Depth IS the precision. -->
+        <container id="grocery-budget-2026-09" name="Eylül Market Bütçesi">
+            <at space="time"
+                start="gregorian-year/2026/gregorian-month/09"
+                end="gregorian-year/2026/gregorian-month/09" />
+            <children>buy-milk</children>
+        </container>
+
+        <!-- three parents. no <at space="time"> of its own. -->
+        <container id="buy-milk" name="Süt Al">
+            <at space="shopping-list" start="slot/1" end="slot/1" />
+            <at space="shopping-trip-2026-09-20" start="slot/3" end="slot/3" />
+            <at space="grocery-budget-2026-09" start="slot/7" end="slot/7" />
+        </container>
+
+        <!--
+      "önümüzdeki ilk alışveriş eyleminin içinde olun"
+      The predicate is stored, not the answer. It resolves the moment a
+      matching container appears — maybe when you walk into the shop.
+    -->
+        <container id="buy-zart" name="Zart Al">
+            <at space="shopping-list" start="slot/2" end="slot/2" />
+            <floating space="time" op="inside-first-matching" kind="shopping-trip" after="now" />
+        </container>
+
+    </store>
+
+</ctcp-example>
