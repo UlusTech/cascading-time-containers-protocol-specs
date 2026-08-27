@@ -1,5 +1,3 @@
-console.log("Hello via Bun!");
+import { AnContainer } from "./containers";
 
-type testType = number;
-
-const testVar: testType = "String";
+console.log(AnContainer);
