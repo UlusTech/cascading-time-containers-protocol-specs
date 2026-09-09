@@ -28,51 +28,26 @@ import type {
 /**
  * Every container has its own uniqe ID.
  */
-type ContainerID = Brand<string, "ContainerID">;
+export type ContainerID = Brand<string, "ContainerID">;
 
-/**
- * An container is actually an box, that can have boxes insade of it; and be in boxes.
- *
- * The "box" you see in most calendars can not host other ones, to you have single depth.
- * This is fixed by making containers be able to contain others insade of it. See {@linkcode parents} and {@linkcode childirens}.
- *
- * An container might be in multiple containers, and their order only depends on each parent container.
- * So one container can be insade multiple, and that does not (necessarily) bothers others. See {@linkcode childirens}.
- *
- * An container being insade of an other container does not means it needs an position on that containers parent.
- * So "Big talk" can be insade the "Dinner event" but it does not needs to be a childiren of the time containers.
- *
- * Order is "when", and it does not needs to correspond to a spesific container, like a day, hour, minute or second.
- * They can, if you want them to.
- *
- * Containers are arragend by an engine that checks for conditions, moves with conditions, predicts and plans.
- * This way, you always have an up-to-date calendar, with no conflicts.
- *
- * TODO: We need to think about the "path" things.
- * We have a logic called "path", it makes you be able to get a spesific container on reqursive systems.
- * Like "gregorian-year/2026/gregorian-month/09/gregorian-day/06/utc-hour/16/utc-minute/30/dinner-event" is the event at 06-09-2026 16:30
- * But there can be an other dinner event that is at 2027 or 2025.
- * You should be able to generative/reqursive container logic.
- * Single container at multiple dates, and does not crosses each other. Like when one gets delayed, other ones stay same.
- * Think about this. This is important.
- */
 type Container = {
 	/**
 	 * The uniqe identifier of this container
 	 */
 	id: ContainerID;
-	/**
-	 * Every container stores where it is on its parent.
-	 *
-	 * TODO: Question if we should do {@linkcode parents} reverse. Insted of parents hosting the pos, childiren holding it.
-	 */
-	parents: ContainerID[];
-	/**
-	 * Every container has its childiren listed.
-	 * Currently, you get a containers pos by getting that parents chiliren list.
-	 * This is in a better way for simulations, data sync is important.
-	 */
-	childirens: { [key in ContainerID]: number };
+	// // paths: PathSegmentRecordID[];
+	// // /**
+	// //  * Every container stores where it is on its parent.
+	// //  *
+	// //  * TODO: Question if we should do {@linkcode parents} reverse. Insted of parents hosting the pos, childiren holding it.
+	// //  */
+	// // parents: ContainerID[];
+	// // /**
+	// //  * Every container has its childiren listed.
+	// //  * Currently, you get a containers pos by getting that parents chiliren list.
+	// //  * This is in a better way for simulations, data sync is important.
+	// //  */
+	// // childirens: { [key in ContainerID]: number };
 };
 
 /**
@@ -138,3 +113,8 @@ type ContainerEngineDataRecord = ContainerEngineData & { id: ContainerID };
  * {@linkcode Container} and its engine data ({@linkcode ContainerEngineData}) together.
  */
 type ContainerWithEnginData = Container & ContainerEngineData;
+
+const anInvokedVariable = (() => {
+	return "AnInvokedString";
+})();
+const anVariable = "AnString";
