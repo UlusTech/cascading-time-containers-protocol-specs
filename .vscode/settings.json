@@ -8,5 +8,14 @@
 	"editor.codeActionsOnSave": {
 		"source.fixAll.biome": "always",
 		"source.organizeImports.biome": "always"
-	}
+	},
+	"[typescript]": { "editor.defaultFormatter": "biomejs.biome" },
+	"[javascript]": { "editor.defaultFormatter": "biomejs.biome" },
+	"[json]": { "editor.defaultFormatter": "biomejs.biome" },
+	"[jsonc]": { "editor.defaultFormatter": "biomejs.biome" },
+	"deno.enable": false,
+	"prettier.enable": false,
+	"editor.detectIndentation": false,
+	"editor.insertSpaces": false,
+	"editor.tabSize": 2
 }
