@@ -1,0 +1,47 @@
+{
+	// A segment is ONE OCCURRENCE of a container. One container, many segments.
+	"pathSegmentRecords": [
+		{ "id": "s1", "containerId": "gregorian-time" },
+		{ "id": "s2", "containerId": ["gregorian", "year", "2026"] },
+		{ "id": "s3", "containerId": ["gregorian", "month", "09"] },
+		{ "id": "s4", "containerId": ["gregorian", "day", "07"] },
+		{ "id": "s5", "containerId": ["utc", "hour", "16"] },
+		{ "id": "s6", "containerId": ["utc", "minute", "30"] },
+
+		{ "id": "s7", "containerId": ["utc", "minute", "31"] },
+
+		{ "id": "s8", "containerId": "dinner-party" },
+		{ "id": "s9", "containerId": "entry-talk" },
+		{ "id": "s10", "containerId": "entry-meal" },
+
+		// Two entry-talks in one party. Same container, two occurrences.
+		{ "id": "s11", "containerId": "entry-talk" },
+
+		// No time anywhere above it. Shows inside its box, never on a calendar.
+		{ "id": "s12", "containerId": "shopping-list" },
+		{ "id": "s13", "containerId": "milk" }
+	],
+
+	// A cascade is an ordered list. Index is order. Order is time.
+	// Two can not be in the same place, because an array has no such position.
+	"cascades": [
+		{ "owner": null, "members": ["s1", "s12"] },
+		{ "owner": "s1", "members": ["s2"] },
+		{ "owner": "s2", "members": ["s3"] },
+		{ "owner": "s3", "members": ["s4"] },
+		{ "owner": "s4", "members": ["s5"] },
+		{ "owner": "s5", "members": ["s6", "s7"] },
+		{ "owner": "s6", "members": ["s8"] },
+		{ "owner": "s8", "members": ["s9", "s10", "s11"] },
+		{ "owner": "s12", "members": ["s13"] }
+	],
+
+	// Keyed by segment, not by container. This entry-talk gets its own name;
+	// the other one is untouched.
+	"meta": {
+		"s8": { "name": "Dinner Party" },
+		"s9": { "name": "Entry Talk" },
+		"s11": { "name": "Closing Words" },
+		"s13": { "name": "1L Milk" }
+	}
+}
