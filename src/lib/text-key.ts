@@ -62,7 +62,6 @@ export function getText(key: TextKey): TextKeyValue {
  *
  * @example
  * ```ts
- * a
  * parseTextKey("yes"); // "yes"
  * parseTextKey("nope"); // undefined
  * parseTextKey("toString"); // undefined
