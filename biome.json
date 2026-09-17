@@ -15,7 +15,22 @@
 	"linter": {
 		"enabled": true,
 		"rules": {
-			"preset": "recommended"
+			"preset": "recommended",
+			"style": {
+				"useNamingConvention": {
+					"level": "error",
+					"options": {
+						"conventions": [
+							{
+								"selector": {
+									"kind": "any"
+								},
+								"match": "[A-Za-z_$][A-Za-z0-9_$]+"
+							}
+						]
+					}
+				}
+			}
 		}
 	},
 	"javascript": {
