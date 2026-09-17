@@ -46,6 +46,23 @@
 				"fail_text": "Push blocked. Type errors."
 			},
 			{
+				"name": "doc-check",
+				"glob": [
+					"*.ts",
+					"*.tsx",
+					"*.mts",
+					"*.cts",
+					"*.js",
+					"*.jsx",
+					"*.mjs",
+					"*.cjs",
+					"*.json",
+					"bun.lock"
+				],
+				"run": "bun run doc-check",
+				"fail_text": "Push blocked. A documentation example does not type-check."
+			},
+			{
 				"name": "lint",
 				"glob": [
 					"*.ts",

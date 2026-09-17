@@ -11,7 +11,8 @@
 		"lint": "biome check",
 		"lint:watch": "biome-watch",
 		"format": "biome check --write",
-		"check": "bun run typecheck && bun run lint",
+		"doc-check": "bun run scripts/doc-check.ts",
+		"check": "bun run typecheck && bun run doc-check && bun run lint",
 		"test": "bun test",
 		"prepare": "lefthook install"
 	},
