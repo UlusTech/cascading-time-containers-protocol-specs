@@ -19,13 +19,20 @@
  *   bun scripts/doc-check.ts --print src/thing.ts   dump the generated modules
  *
  * Exit status is 0 when every example checks and 1 otherwise, which is all a
- * git hook needs. With lefthook:
+ * git hook needs. As a pre-push job in lefthook.json:
  *
- *   pre-push:
- *     parallel: true
- *     commands:
- *       doc-check:
- *         run: bun scripts/doc-check.ts
+ *   {
+ *     "name": "doc-check",
+ *     "glob": ["*.ts", "*.tsx", "*.mts", "*.cts", "*.json", "bun.lock"],
+ *     "run": "bun run doc-check",
+ *     "fail_text": "Push blocked. A documentation example does not type-check."
+ *   }
+ *
+ * The glob only decides whether the job runs at all; the script always scans
+ * its own globs and relies on its freshness cache to make an untouched tree
+ * cost ~9ms. Note that with lefthook's `output: ["failure"]`, a passing run
+ * prints nothing — including the fence warnings, which go to stderr. They are
+ * only shown when the job fails, or when it is run by hand.
  *
  * Nothing is written next to your sources. The generated modules exist only in
  * memory, so an interrupted run cannot leave junk in the worktree and two runs
