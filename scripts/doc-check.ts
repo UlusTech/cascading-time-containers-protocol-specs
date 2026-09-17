@@ -121,6 +121,35 @@ const DEFAULT_PATTERNS = [
 	"src/**/*.mts",
 	"src/**/*.cts",
 ];
+
+/**
+ * Tracing state, kept at module level so the extraction functions stay free of
+ * a context parameter that only exists for diagnostics. `--debug` turns the
+ * trace on; warnings are always on, because every one of them means a comment
+ * is being read differently than its author intended.
+ */
+let debugEnabled = false;
+let warningCount = 0;
+/** Set once the project root is known, so traces print short relative paths. */
+let traceRoot = "";
+
+/** Shortens absolute paths in trace and warning text. */
+function shorten(message: string): string {
+	return traceRoot
+		? message.replaceAll(traceRoot + "/", "").replaceAll(traceRoot + "\\", "")
+		: message;
+}
+
+/** Writes a trace line to stderr, so `--json` output on stdout stays parseable. */
+function trace(message: string): void {
+	if (debugEnabled) process.stderr.write(`  ${shorten(message)}\n`);
+}
+
+/** Writes a line to stderr whether or not `--debug` is on. */
+function warn(message: string): void {
+	warningCount++;
+	process.stderr.write(`doc-check warning: ${shorten(message)}\n`);
+}
 const IGNORED_DIRECTORIES =
 	/(?:^|[\\/])(?:node_modules|\.git|dist|build|coverage|out)(?:[\\/]|$)/;
 const MARKDOWN_PATTERN = /\.(?:md|markdown)$/i;
@@ -323,7 +352,10 @@ function isImportableIdentifier(name: string): boolean {
  * write a Markdown block that itself contains a triple-backtick example.
  * Blocks parked inside `<!-- ... -->` stay parked, same as in Deno.
  */
-function findFencedBlocks(lines: readonly SnippetLine[]): FencedBlock[] {
+function findFencedBlocks(
+	lines: readonly SnippetLine[],
+	originLabel: string,
+): FencedBlock[] {
 	const blocks: FencedBlock[] = [];
 	let insideHtmlComment = false;
 	let lineIndex = 0;
@@ -365,6 +397,14 @@ function findFencedBlocks(lines: readonly SnippetLine[]): FencedBlock[] {
 			closingIndex++;
 		}
 		if (closingIndex >= lines.length) {
+			// An unterminated fence is the single most confusing thing that can
+			// happen here: the fences after it pair up shifted by one, so prose ends
+			// up being type-checked as code. Say so out loud rather than limping on.
+			warn(
+				`${originLabel}:${currentLine.originalLine}: code fence opened with ` +
+					`${"`".repeat(opening.markerCount)}${opening.infoString.trim()} is never closed — ` +
+					`the blocks after it will be paired wrongly`,
+			);
 			lineIndex++;
 			continue;
 		}
@@ -379,7 +419,31 @@ function findFencedBlocks(lines: readonly SnippetLine[]): FencedBlock[] {
 			} satisfies SnippetLine;
 		});
 
+		// A fence opening *inside* a block body, with at least as many markers as
+		// the block itself, means the previous block was never closed and this one
+		// got swallowed — the body now contains prose, which the checker will
+		// report as a pile of nonsense errors. A legitimately nested fence is
+		// always shorter than the block that contains it, so it is not flagged.
+		for (const bodyLine of body) {
+			const nested = parseFenceOpening(bodyLine.text);
+			if (!nested || nested.marker !== opening.marker) continue;
+			if (nested.markerCount < opening.markerCount) continue;
+			if (nested.infoString.trim().length === 0) continue;
+			warn(
+				`${originLabel}:${currentLine.originalLine}: this block swallowed another fence ` +
+					`at line ${bodyLine.originalLine} (${nested.marker.repeat(nested.markerCount)}` +
+					`${nested.infoString.trim()}) — the block above it is probably missing its closing fence`,
+			);
+			break;
+		}
+
 		const attributes = opening.infoString.trim().split(/\s+/).filter(Boolean);
+		trace(
+			`fence ${originLabel}:${currentLine.originalLine}-${lines[closingIndex]!.originalLine} ` +
+				`marker=${opening.marker.repeat(opening.markerCount)} ` +
+				`info=${JSON.stringify(opening.infoString.trim())} ` +
+				`body=${body.length} line(s)${opening.insideBlockquote ? " blockquoted" : ""}`,
+		);
 		blocks.push({
 			languageTag: (attributes[0] ?? "").toLowerCase(),
 			attributes,
@@ -875,6 +939,8 @@ function extractSnippets(
 	let lineGroups: SnippetLine[][];
 	let moduleExports: ModuleExports | undefined;
 
+	trace(`file ${sourcePath}`);
+
 	if (MARKDOWN_PATTERN.test(sourcePath)) {
 		// A Markdown file has no export surface to inject; the whole file is one
 		// stream of lines to scan for fences.
@@ -891,18 +957,47 @@ function extractSnippets(
 		lineGroups = scanned.jsDocRanges.map((range) =>
 			jsDocToLines(fileText, range, lineStarts),
 		);
+		if (debugEnabled) {
+			trace(
+				`exports values=[${[...scanned.moduleExports.valueNames].join(", ")}] ` +
+					`types=[${[...scanned.moduleExports.typeNames].join(", ")}] ` +
+					`default=${scanned.moduleExports.defaultName ?? "-"}`,
+			);
+			for (const group of lineGroups) {
+				const firstLine = group[0]?.originalLine ?? 0;
+				const lastLine = group.at(-1)?.originalLine ?? 0;
+				const fenceLineCount = group.filter((line) =>
+					/^\s*(?:`{3,}|~{3,})/.test(line.text),
+				).length;
+				trace(
+					`jsdoc lines ${firstLine}-${lastLine}, ${fenceLineCount} fence line(s)` +
+						(fenceLineCount % 2 === 1
+							? "  <-- odd count, fences will pair wrongly"
+							: ""),
+				);
+			}
+		}
 	}
 
 	const snippets: Snippet[] = [];
 	for (const lineGroup of lineGroups) {
-		for (const block of findFencedBlocks(lineGroup)) {
+		for (const block of findFencedBlocks(lineGroup, sourcePath)) {
 			const extension = LANGUAGE_EXTENSIONS.get(block.languageTag);
-			if (extension === undefined) continue; // json, bash, output samples, ...
+			if (extension === undefined) {
+				trace(
+					`skipped ${sourcePath}:${block.fenceLine}: language tag ${JSON.stringify(block.languageTag)} is not checkable`,
+				);
+				continue; // json, bash, output samples, ...
+			}
 			if (
 				block.attributes.includes("ignore") ||
 				block.attributes.includes("no-check")
-			)
+			) {
+				trace(
+					`skipped ${sourcePath}:${block.fenceLine}: ${block.attributes.includes("ignore") ? "ignore" : "no-check"} attribute`,
+				);
 				continue;
+			}
 
 			// A leading `#!` is a Deno-ism with no meaning here. Blank the line rather
 			// than removing it, so the numbering stays honest.
@@ -911,7 +1006,10 @@ function extractSnippets(
 					? { ...line, text: "" }
 					: line,
 			);
-			if (lines.every((line) => line.text.trim() === "")) continue;
+			if (lines.every((line) => line.text.trim() === "")) {
+				trace(`skipped ${sourcePath}:${block.fenceLine}: block is empty`);
+				continue;
+			}
 
 			snippets.push({
 				sourcePath,
@@ -1065,6 +1163,20 @@ function generateSnippetModule(
 	snippet.preludeLineCount = prelude.length;
 	snippet.generatedText = [...prelude, body, "export {};"].join("\n");
 	snippet.generatedLineStarts = computeLineStartOffsets(snippet.generatedText);
+
+	if (debugEnabled) {
+		trace(
+			`snippet ${snippet.sourcePath}:${snippet.fenceLine} -> ${snippet.virtualPath}`,
+		);
+		for (const preludeLine of prelude) trace(`  injected: ${preludeLine}`);
+		snippet.lines.forEach((line, index) => {
+			const generatedLineNumber = prelude.length + index + 1;
+			trace(
+				`  gen ${String(generatedLineNumber).padStart(3)} <- ` +
+					`src ${String(line.originalLine).padStart(4)} (+${line.columnDelta} cols) | ${line.text}`,
+			);
+		});
+	}
 }
 
 /**
@@ -1254,6 +1366,7 @@ interface Options {
 	quiet: boolean;
 	useCache: boolean;
 	listOnly: boolean;
+	debug: boolean;
 	printPath: string | undefined;
 }
 
@@ -1268,6 +1381,7 @@ function parseOptions(): Options {
 			quiet: { type: "boolean", default: false },
 			"no-cache": { type: "boolean", default: false },
 			list: { type: "boolean", default: false },
+			debug: { type: "boolean", default: false },
 			print: { type: "string" },
 			help: { type: "boolean", default: false },
 		},
@@ -1286,6 +1400,8 @@ function parseOptions(): Options {
 				"  --quiet            print nothing when everything passes",
 				"  --no-cache         re-check even when nothing changed",
 				"  --list             list the snippets that would be checked",
+				"  --debug            trace extraction to stderr: comments, fences, line maps,",
+				"                     the generated tsconfig, and unmapped diagnostic positions",
 				"  --print <file>     print the generated module of each snippet in <file>",
 				"",
 				"Fence attributes: `ignore` and `no-check` skip a block.",
@@ -1306,6 +1422,7 @@ function parseOptions(): Options {
 		quiet: values.quiet!,
 		useCache: !values["no-cache"],
 		listOnly: values.list!,
+		debug: values.debug!,
 		printPath: values.print,
 	};
 }
@@ -1334,9 +1451,16 @@ async function discoverFiles(options: Options): Promise<string[]> {
 
 async function main(): Promise<number> {
 	const options = parseOptions();
+	debugEnabled = options.debug;
+	traceRoot = options.projectRoot;
 	const startedAt = performance.now();
 
+	trace(`root ${options.projectRoot}`);
+	trace(`tsconfig ${options.tsconfigPath}`);
+	trace(`patterns ${options.patterns.join(" ")}`);
+
 	const filePaths = await discoverFiles(options);
+	trace(`${filePaths.length} file(s) matched`);
 
 	// Read everything once: the text is needed for extraction, for the freshness
 	// hash and for printing code frames. The reads are independent, so they go
@@ -1354,12 +1478,14 @@ async function main(): Promise<number> {
 		const text = fileTexts.get(filePath)!;
 		return text.includes("```") || text.includes("~~~");
 	});
+	trace(`${candidatePaths.length} file(s) contain a fence`);
 
 	// Fast path: if every file the last good run depended on still hashes the
 	// same, nothing can have changed. This is what keeps a pre-push hook from
 	// re-checking an untouched repository.
 	if (
 		options.useCache &&
+		!options.debug &&
 		!options.listOnly &&
 		options.printPath === undefined
 	) {
@@ -1494,6 +1620,9 @@ async function main(): Promise<number> {
 			}),
 		);
 
+		trace(`generated ${generatedConfigPath}:`);
+		trace(virtualFiles.get(generatedConfigPath) ?? "");
+
 		const snapshot = await api.updateSnapshot({
 			openProjects: [generatedConfigPath],
 		});
@@ -1541,6 +1670,13 @@ async function main(): Promise<number> {
 					continue;
 				}
 				const mapped = mapPosition(snippet, diagnostic.pos);
+				trace(
+					`diagnostic TS${diagnostic.code} at offset ${diagnostic.pos} of ` +
+						`${diagnostic.fileName} -> ${snippet.sourcePath}:${mapped.line}:${mapped.column}` +
+						(mapped.exact
+							? ""
+							: "  (fell on an injected line, reported at the fence)"),
+				);
 				reported.push({
 					filePath: snippet.sourcePath,
 					line: mapped.line,
@@ -1627,9 +1763,12 @@ async function main(): Promise<number> {
 	}
 
 	if (!options.quiet) {
+		const warningSuffix =
+			warningCount > 0 ? `, ${warningCount} warning(s)` : "";
 		console.log(
 			dim(
-				`doc-check: ${snippets.length} example(s) in ${candidatePaths.length} file(s) OK (${elapsedMilliseconds}ms)`,
+				`doc-check: ${snippets.length} example(s) in ${candidatePaths.length} file(s) OK` +
+					`${warningSuffix} (${elapsedMilliseconds}ms)`,
 			),
 		);
 	}
