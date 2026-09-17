@@ -87,6 +87,48 @@
  *   - `deno check --doc` is, as of Deno 2.9, ignored with a warning when the
  *     native type checker is in use — so this currently does something Deno
  *     itself does not.
+ *
+ * ---------------------------------------------------------------------------
+ * On Effect-TS and OpenTelemetry — Claude's assessment, NOT a decision
+ * ---------------------------------------------------------------------------
+ * Everything in this section is a proposal from an assistant, kept here so the
+ * question does not have to be re-litigated from scratch. It is not part of the
+ * design and can be deleted without touching a line of code.
+ *
+ * The question was whether this script should be written in Effect, partly for
+ * the OpenTelemetry integration. Measured on Bun 1.3.13, September 2026:
+ *
+ *   plain bun, no dependencies                 11-23ms process startup
+ *   import { Effect } from "effect"           +210-250ms unbundled, ~45ms bundled
+ *   @effect/opentelemetry + OTel SDK          +240-280ms unbundled
+ *   an @effect/cli hello-world                 378-471ms from source
+ *                                              129-159ms bundled (1.4MB)
+ *
+ * Against this script's own numbers — 544ms cold for 309 examples across 303
+ * files, and 95ms total for a cached run — unbundled Effect would add roughly
+ * 25x the work a cached run actually does, on every push. The script also has
+ * about four failure modes (no tsconfig, the server refuses the project, the
+ * glob matched nothing, a file will not read), which is not enough error
+ * surface to earn a typed error channel. So: plain TypeScript here.
+ *
+ * The assessment is different for the CLI this may end up inside. There, Effect
+ * has things to do that do not exist at this scale: a Layer for the compiler
+ * client shared between subcommands, rollback for scaffolding that writes many
+ * files, bounded concurrency across several checks, uniform typed errors, and
+ * @effect/cli's parsing and help text. Bundled, its floor is ~150ms, which is
+ * fine for a command a person types. Note that @effect/cli (0.77) and
+ * @effect/platform (0.97) are pre-1.0 and churn; `effect` core (3.22) is not.
+ *
+ * On OpenTelemetry specifically: spans from a 250ms process that exits go
+ * nowhere without a collector. It earns its place when these checks run in CI
+ * and the timings are aggregated, or if a watch mode ever appears. Until then a
+ * `--timings` flag would answer the same question for free.
+ *
+ * If this is ever moved onto Effect, the work is small *provided the split
+ * below is kept*: everything above `main()` is pure — no I/O, no process state
+ * beyond the trace flag — so those functions drop straight into `Effect.sync`
+ * unchanged, and only the shell needs wrapping. The two places that would
+ * change are marked with `EFFECT SEAM` comments.
  */
 
 import { mkdir, readdir } from "node:fs/promises";
@@ -215,6 +257,13 @@ interface ReportedDiagnostic {
 /* ========================================================================== */
 /* Text helpers                                                               */
 /* ========================================================================== */
+/*
+ * EFFECT SEAM (Claude's note, not decided): everything from here down to the
+ * reporting section is pure — it takes text and returns data, touches no file
+ * system, no network and no clock. Keep it that way. It is what makes the
+ * extractor reusable by a snippet *runner*, and what would let an Effect
+ * version wrap it in `Effect.sync` without rewriting any of the logic.
+ */
 
 /** Splits text into lines, tolerating CRLF. Index 0 is line 1. */
 function splitLines(text: string): string[] {
@@ -1576,6 +1625,11 @@ async function main(): Promise<number> {
 		readFile: (fileName) => virtualFiles.get(fileName),
 	};
 
+	// EFFECT SEAM (Claude's note, not decided): `api` is the one real resource in
+	// this script — it spawns the compiler and must be closed. The try/finally
+	// below is exactly the shape `Effect.acquireRelease` exists for, and it is
+	// the single strongest argument for Effect in a larger CLI, where several
+	// subcommands would want to share one client through a Layer.
 	const api = new API({ cwd: options.projectRoot, fs: overlayFileSystem });
 	const reported: ReportedDiagnostic[] = [];
 	let diagnosticsOutsideExamples = 0;
