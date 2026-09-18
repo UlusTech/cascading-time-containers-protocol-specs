@@ -16,6 +16,10 @@
  */
 export const keys = {
 	yes: "yes",
+	siteTitle: "CTCP",
+	backLink: "back",
+	notFoundTitle: "Not found",
+	notFoundBody: "No container there.",
 } as const satisfies Record<string, string>;
 
 /**
