@@ -1,3 +1,5 @@
 import type { ContainerID } from "./container";
 
-export type Cascade = { parent: ContainerID; childiren: ContainerID[] };
+type CascadeChildiren = { size: number } | { size: number; id: ContainerID };
+
+export type Cascade = { parent: ContainerID; childiren: CascadeChildiren[] };
