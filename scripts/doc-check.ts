@@ -184,9 +184,10 @@ let traceRoot = "";
 
 /** Shortens absolute paths in trace and warning text. */
 function shorten(message: string): string {
-	return traceRoot
-		? message.replaceAll(traceRoot + "/", "").replaceAll(traceRoot + "\\", "")
-		: message;
+	if (!traceRoot) return message;
+	return message
+		.replaceAll(`${traceRoot}/`, "")
+		.replaceAll(`${traceRoot}\\`, "");
 }
 
 /** Writes a trace line to stderr, so `--json` output on stdout stays parseable. */
@@ -297,10 +298,10 @@ function offsetToPosition(
 	let high = lineStarts.length - 1;
 	while (low < high) {
 		const middle = (low + high + 1) >> 1;
-		if (lineStarts[middle]! <= offset) low = middle;
+		if ((lineStarts[middle] ?? 0) <= offset) low = middle;
 		else high = middle - 1;
 	}
-	return { line: low + 1, column: offset - lineStarts[low]! + 1 };
+	return { line: low + 1, column: offset - (lineStarts[low] ?? 0) + 1 };
 }
 
 /** Path as it should be printed: relative to the project, native separators. */
@@ -417,7 +418,8 @@ function findFencedBlocks(
 	let lineIndex = 0;
 
 	while (lineIndex < lines.length) {
-		const currentLine = lines[lineIndex]!;
+		const currentLine = lines[lineIndex];
+		if (!currentLine) break;
 		const trimmed = currentLine.text.replace(/^[ \t]+/, "");
 
 		if (insideHtmlComment) {
@@ -442,12 +444,10 @@ function findFencedBlocks(
 		// whatever follows is still scanned.
 		let closingIndex = lineIndex + 1;
 		while (closingIndex < lines.length) {
+			const candidateLine = lines[closingIndex];
+			if (!candidateLine) break;
 			if (
-				isFenceClosing(
-					lines[closingIndex]!.text,
-					opening.marker,
-					opening.markerCount,
-				)
+				isFenceClosing(candidateLine.text, opening.marker, opening.markerCount)
 			)
 				break;
 			closingIndex++;
@@ -493,9 +493,11 @@ function findFencedBlocks(
 			break;
 		}
 
+		const closingLineNumber =
+			lines[closingIndex]?.originalLine ?? currentLine.originalLine;
 		const attributes = opening.infoString.trim().split(/\s+/).filter(Boolean);
 		trace(
-			`fence ${originLabel}:${currentLine.originalLine}-${lines[closingIndex]!.originalLine} ` +
+			`fence ${originLabel}:${currentLine.originalLine}-${closingLineNumber} ` +
 				`marker=${opening.marker.repeat(opening.markerCount)} ` +
 				`info=${JSON.stringify(opening.infoString.trim())} ` +
 				`body=${body.length} line(s)${opening.insideBlockquote ? " blockquoted" : ""}`,
@@ -732,8 +734,7 @@ function scanSource(text: string, isJsx: boolean): ScannedSource {
 	// --- export state machine ------------------------------------------------
 	// Only top-level `export` keywords matter (a nested one is inside a namespace
 	// or a class body and does not widen the module's import surface).
-	for (let index = 0; index < tokens.length; index++) {
-		const token = tokens[index]!;
+	for (const [index, token] of tokens.entries()) {
 		if (token.kind !== SyntaxKind.ExportKeyword) continue;
 		if (token.braceDepth !== 0) continue;
 
@@ -769,11 +770,9 @@ function scanSource(text: string, isJsx: boolean): ScannedSource {
 			let lastIdentifier: string | undefined;
 			let sawAs = false;
 
-			while (
-				cursor < tokens.length &&
-				tokens[cursor]!.kind !== SyntaxKind.CloseBraceToken
-			) {
-				const element = tokens[cursor]!;
+			for (;;) {
+				const element = tokens[cursor];
+				if (!element || element.kind === SyntaxKind.CloseBraceToken) break;
 				if (element.kind === SyntaxKind.CommaToken) {
 					if (lastIdentifier !== undefined) {
 						specifiers.push({
@@ -820,12 +819,15 @@ function scanSource(text: string, isJsx: boolean): ScannedSource {
 		}
 
 		// `export <modifiers> <declaration> <name>`
-		while (
-			peek() &&
-			(peek()!.text === "declare" ||
-				peek()!.text === "async" ||
-				peek()!.text === "abstract")
-		) {
+		for (;;) {
+			const modifier = peek();
+			if (!modifier) break;
+			if (
+				modifier.text !== "declare" &&
+				modifier.text !== "async" &&
+				modifier.text !== "abstract"
+			)
+				break;
 			cursor++;
 		}
 		const keyword = peek();
@@ -908,7 +910,8 @@ function collectBoundNames(
 	let depth = 0;
 	let expectBindingAfterColon = false;
 	for (let index = start; index < tokens.length; index++) {
-		const token = tokens[index]!;
+		const token = tokens[index];
+		if (!token) break;
 		if (
 			token.kind === SyntaxKind.OpenBraceToken ||
 			token.kind === SyntaxKind.OpenBracketToken
@@ -954,15 +957,11 @@ function jsDocToLines(
 		// worth checking, and blanking them keeps the numbering aligned.
 		const isEdgeLine =
 			offsetWithinComment === 0 || offsetWithinComment === rawLines.length - 1;
-		const decoration = /^([ \t]*\*[ \t]?)/.exec(rawLine);
+		const decoration = /^([ \t]*\*[ \t]?)/.exec(rawLine)?.[1] ?? "";
 		return {
-			text: isEdgeLine
-				? ""
-				: decoration
-					? rawLine.slice(decoration[1]!.length)
-					: rawLine,
+			text: isEdgeLine ? "" : rawLine.slice(decoration.length),
 			originalLine: startLine + offsetWithinComment,
-			columnDelta: isEdgeLine ? 0 : (decoration?.[1]?.length ?? 0),
+			columnDelta: isEdgeLine ? 0 : decoration.length,
 		} satisfies SnippetLine;
 	});
 }
@@ -1110,15 +1109,17 @@ function analyseSnippet(
 		if (token.kind === SyntaxKind.Identifier) mentionedNames.add(token.text);
 	}
 
-	for (let index = 0; index < tokens.length; index++) {
-		const token = tokens[index]!;
+	for (const [index, token] of tokens.entries()) {
 		if (token.braceDepth !== 0) continue;
 
 		switch (token.kind) {
 			case SyntaxKind.ImportKeyword: {
 				// Every binding of an import declaration shadows an injected one.
+				// `import { a as b }` binds `b`, not `a`, so a name followed by `as`
+				// is the imported name and is skipped.
 				for (let scan = index + 1; scan < tokens.length; scan++) {
-					const inner = tokens[scan]!;
+					const inner = tokens[scan];
+					if (!inner) break;
 					if (inner.text === "from" || inner.kind === SyntaxKind.SemicolonToken)
 						break;
 					if (inner.kind === SyntaxKind.StringLiteral) break;
@@ -1127,8 +1128,7 @@ function analyseSnippet(
 						inner.text !== "type" &&
 						inner.text !== "as"
 					) {
-						const next = tokens[scan + 1];
-						if (next?.text !== "as") boundNames.add(inner.text);
+						if (tokens[scan + 1]?.text !== "as") boundNames.add(inner.text);
 					}
 				}
 				break;
@@ -1152,11 +1152,12 @@ function analyseSnippet(
 				break;
 			}
 			default: {
+				const nextToken = tokens[index + 1];
 				if (
 					token.text === "type" &&
-					tokens[index + 1]?.kind === SyntaxKind.Identifier
+					nextToken?.kind === SyntaxKind.Identifier
 				) {
-					boundNames.add(tokens[index + 1]!.text);
+					boundNames.add(nextToken.text);
 				}
 				break;
 			}
@@ -1192,7 +1193,7 @@ function generateSnippetModule(
 		// The generated module lives in the same directory as its source, so a bare
 		// "./name.ext" specifier is always the right way back to it.
 		const moduleSpecifier = JSON.stringify(
-			"./" + (snippet.sourcePath.split(/[\\/]/).pop() ?? ""),
+			`./${snippet.sourcePath.split(/[\\/]/).pop() ?? ""}`,
 		);
 
 		if (defaultSpecifier && valueSpecifiers.length > 0) {
@@ -1266,8 +1267,11 @@ function mapPosition(
 /* Reporting                                                                  */
 /* ========================================================================== */
 
-const COLOR_ENABLED =
-	Boolean(process.stdout.isTTY) && process.env["NO_COLOR"] === undefined;
+// Destructured rather than read with `process.env.NO_COLOR`, which a project
+// using `noPropertyAccessFromIndexSignature` would reject, or with a computed
+// key, which Biome's useLiteralKeys rejects.
+const { NO_COLOR } = process.env;
+const COLOR_ENABLED = Boolean(process.stdout.isTTY) && NO_COLOR === undefined;
 const paint = (code: string, text: string): string =>
 	COLOR_ENABLED ? `\u001B[${code}m${text}\u001B[0m` : text;
 const red = (text: string): string => paint("31", text);
@@ -1431,15 +1435,15 @@ function parseOptions(): Options {
 		args: process.argv.slice(2),
 		allowPositionals: true,
 		options: {
-			tsconfig: { type: "string", default: "tsconfig.json" },
+			tsconfig: { type: "string" },
 			root: { type: "string" },
-			json: { type: "boolean", default: false },
-			quiet: { type: "boolean", default: false },
-			"no-cache": { type: "boolean", default: false },
-			list: { type: "boolean", default: false },
-			debug: { type: "boolean", default: false },
+			json: { type: "boolean" },
+			quiet: { type: "boolean" },
+			"no-cache": { type: "boolean" },
+			list: { type: "boolean" },
+			debug: { type: "boolean" },
 			print: { type: "string" },
-			help: { type: "boolean", default: false },
+			help: { type: "boolean" },
 		},
 	});
 
@@ -1467,18 +1471,18 @@ function parseOptions(): Options {
 	}
 
 	const projectRoot = resolve(values.root ?? process.cwd());
-	const tsconfigValue = values.tsconfig!;
+	const tsconfigValue = values.tsconfig ?? "tsconfig.json";
 	return {
 		patterns: positionals.length > 0 ? positionals : DEFAULT_PATTERNS,
 		tsconfigPath: isAbsolute(tsconfigValue)
 			? tsconfigValue
 			: join(projectRoot, tsconfigValue),
 		projectRoot,
-		json: values.json!,
-		quiet: values.quiet!,
-		useCache: !values["no-cache"],
-		listOnly: values.list!,
-		debug: values.debug!,
+		json: values.json ?? false,
+		quiet: values.quiet ?? false,
+		useCache: values["no-cache"] !== true,
+		listOnly: values.list ?? false,
+		debug: values.debug ?? false,
 		printPath: values.print,
 	};
 }
@@ -1531,8 +1535,8 @@ async function main(): Promise<number> {
 	// A file with no fence in it cannot hold an example. Rejecting those before
 	// any scanning keeps the common case — most of a codebase — close to free.
 	const candidatePaths = filePaths.filter((filePath) => {
-		const text = fileTexts.get(filePath)!;
-		return text.includes("```") || text.includes("~~~");
+		const text = fileTexts.get(filePath);
+		return text !== undefined && (text.includes("```") || text.includes("~~~"));
 	});
 	trace(`${candidatePaths.length} file(s) contain a fence`);
 
@@ -1565,7 +1569,9 @@ async function main(): Promise<number> {
 
 	const snippets: Snippet[] = [];
 	for (const filePath of candidatePaths) {
-		const extracted = extractSnippets(filePath, fileTexts.get(filePath)!);
+		const fileText = fileTexts.get(filePath);
+		if (fileText === undefined) continue;
+		const extracted = extractSnippets(filePath, fileText);
 		for (const snippet of extracted.snippets) {
 			generateSnippetModule(snippet, extracted.moduleExports);
 			snippets.push(snippet);
@@ -1658,7 +1664,7 @@ async function main(): Promise<number> {
 			generatedConfigPath,
 			JSON.stringify({
 				extends: toConfigPath(
-					relativeBase.startsWith(".") ? relativeBase : "./" + relativeBase,
+					relativeBase.startsWith(".") ? relativeBase : `./${relativeBase}`,
 				),
 				compilerOptions: {
 					noEmit: true,
