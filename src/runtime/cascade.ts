@@ -1,5 +1,8 @@
-import type { ContainerID } from "./container";
+import type { PathSegmentID } from "./path";
 
-type CascadeChildiren = { size: number } | { size: number; id: ContainerID };
+type CascadeChildiren =
+	| { size: number; id: PathSegmentID } // Should be a tuple?
+	| number
+	| PathSegmentID;
 
-export type Cascade = { parent: ContainerID; childiren: CascadeChildiren[] };
+export type Cascade = { parent: PathSegmentID; childiren: CascadeChildiren[] };
