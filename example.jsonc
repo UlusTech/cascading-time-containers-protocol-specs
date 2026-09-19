@@ -1,0 +1,68 @@
+{
+	"container": [
+		{ "id": ["gregorian"], "childirens": [], "parents": [] },
+		{ "id": ["gregorian", "year", "*"], "childirens": [], "parents": [] },
+		{ "id": ["gregorian", "month", "*"], "childirens": [], "parents": [] },
+		{ "id": ["gregorian", "day", "*"], "childirens": [], "parents": [] },
+		{ "id": ["gregorian", "day", "12"], "childirens": [], "parents": [] },
+		{ "id": ["utc", "hour", "*"], "childirens": [], "parents": [] },
+		{ "id": ["utc", "hour", "23"], "childirens": [], "parents": [] },
+		{ "id": ["utc", "minute", "*"], "childirens": [], "parents": [] },
+		{ "id": ["utc", "minute", "00"], "childirens": [], "parents": [] },
+		{ "id": ["midnight-party"], "childirens": [], "parents": [] }
+	],
+
+	"segment": [
+		{ "id": "s1", "containerID": "gregorian" },
+		{ "id": "s2", "containerID": "gregorian.year.*" },
+		{ "id": "s3", "containerID": "gregorian.month.*" },
+		{ "id": "s4", "containerID": "gregorian.day.*" },
+		{ "id": "s5", "containerID": "utc.hour.*" },
+		{ "id": "s6", "containerID": "utc.minute.*" },
+
+		{ "id": "s7", "containerID": "midnight-party" },
+		{ "id": "s8", "containerID": "gregorian.day.12" },
+		{ "id": "s9", "containerID": "utc.hour.23" },
+		{ "id": "s10", "containerID": "utc.minute.00" }
+	],
+
+	"path": [
+		/** Case 1, insade the day. Path: `gregorian.day.12/midnight-party` */
+		{ "id": "p1", "containerSegment": "s7", "segments": ["s8", "s7"] },
+
+		/** Case 2, exact time. Path: `gregorian.day.12/utc.hour.23/utc.minute.00/midnight-party` */
+		{
+			"id": "p2",
+			"containerSegment": "s7",
+			"segments": ["s8", "s9", "s10", "s7"]
+		}
+	],
+
+	"cascade": [
+		{ "parent": "s1", "childiren": ["s2"] },
+		{ "parent": "s2", "childiren": ["s3"] },
+		{ "parent": "s3", "childiren": ["s4"] }, // Ever month has days
+		{ "parent": "s4", "childiren": ["s5"] },
+		{ "parent": "s5", "childiren": ["s6"] },
+
+		// Case 1: every day 12, when this get read; it shows it on these day containers. But does not have a set time
+		// Case 2: starts the exact time chain
+		{
+			"parent": "s8",
+			"childiren": ["s7", "s9"]
+		},
+		{ "parent": "s9", "childiren": ["s10"] },
+		{ "parent": "s10", "childiren": ["s7"] }
+	],
+
+	"meta": {
+		"midnight-party": {
+			"something": {
+				"name": "Midnight Party",
+				"description": "We party tonight!"
+			}
+		}
+	},
+
+	"engine": {}
+}
