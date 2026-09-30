@@ -214,14 +214,14 @@ const MARKDOWN_PATTERN = /\.(?:md|markdown)$/i;
  * line (the ` * ` of a JSDoc comment, a `> ` blockquote marker), so a column
  * the compiler reports can be shifted back onto the real line.
  */
-interface SnippetLine {
+type SnippetLine = {
 	readonly text: string;
 	readonly originalLine: number; // 1-based, in the original file
 	readonly columnDelta: number;
-}
+};
 
 /** A code block lifted out of a comment or a Markdown file. */
-interface Snippet {
+type Snippet = {
 	/** Absolute path of the file the block was written in. */
 	readonly sourcePath: string;
 	/** Path of the in-memory module handed to the compiler. */
@@ -235,23 +235,23 @@ interface Snippet {
 	preludeLineCount: number;
 	/** Offset of the start of each generated line, for offset-to-position maths. */
 	generatedLineStarts: number[];
-}
+};
 
 /** The export surface of a documented module, split by value versus type. */
-interface ModuleExports {
+type ModuleExports = {
 	readonly valueNames: Set<string>;
 	readonly typeNames: Set<string>;
 	defaultName: string | undefined;
-}
+};
 
-interface FencedBlock {
+type FencedBlock = {
 	readonly languageTag: string;
 	readonly attributes: readonly string[];
 	readonly fenceLine: number;
 	readonly lines: readonly SnippetLine[];
-}
+};
 
-interface ReportedDiagnostic {
+type ReportedDiagnostic = {
 	readonly filePath: string;
 	readonly line: number;
 	readonly column: number;
@@ -260,7 +260,7 @@ interface ReportedDiagnostic {
 	readonly message: string;
 	/** False when the position fell on an injected line and could not be mapped. */
 	readonly mappedExactly: boolean;
-}
+};
 
 /* ========================================================================== */
 /* Text helpers                                                               */
@@ -563,23 +563,23 @@ function isFenceClosing(
 /* Source scanning: comments and exports                                      */
 /* ========================================================================== */
 
-interface ScannedSource {
+type ScannedSource = {
 	/** `/** ... *\/` comment ranges, in source order. */
 	readonly jsDocRanges: readonly { start: number; end: number }[];
 	readonly moduleExports: ModuleExports;
-}
+};
 
 /** A significant (non-trivia) token, with the brace depth it was seen at. */
-interface Token {
+type Token = {
 	readonly kind: SyntaxKind;
 	readonly text: string;
 	readonly braceDepth: number;
-}
+};
 
-interface TokenizeResult {
+type TokenizeResult = {
 	readonly tokens: readonly Token[];
 	readonly jsDocRanges: readonly { start: number; end: number }[];
-}
+};
 
 /**
  * Runs the TypeScript scanner over a source text and returns its significant
@@ -1308,12 +1308,12 @@ function printDiagnostic(
 /* Freshness cache                                                            */
 /* ========================================================================== */
 
-interface CacheState {
+type CacheState = {
 	version: number;
 	typescriptVersion: string;
 	/** Absolute path to content hash, for every file the last good run read. */
 	fileHashes: Record<string, string>;
-}
+};
 
 function hashText(text: string): string {
 	return new Bun.CryptoHasher("sha256").update(text).digest("hex").slice(0, 32);
@@ -1418,7 +1418,7 @@ async function findAmbientTypePackages(projectRoot: string): Promise<string[]> {
 /* Command line                                                               */
 /* ========================================================================== */
 
-interface Options {
+type Options = {
 	patterns: string[];
 	tsconfigPath: string;
 	projectRoot: string;
@@ -1428,7 +1428,7 @@ interface Options {
 	listOnly: boolean;
 	debug: boolean;
 	printPath: string | undefined;
-}
+};
 
 function parseOptions(): Options {
 	const { values, positionals } = parseArgs({
